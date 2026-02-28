@@ -97,7 +97,7 @@
 
   <!--  GZ Sim plugins  -->
   <gazebo>
-    <!-- Vehicle plugin -->
+    <!-- Vehicle plugin (core dynamics + ground truth) -->
     <plugin filename="libgazebo_vehicle.so" name="gazebo_plugins::vehicle_plugins::VehiclePlugin">
       <ros>
         <namespace>/$(arg namespace)</namespace>
@@ -110,6 +110,22 @@
       <base_frame>base_footprint</base_frame>
       <control_delay>0.035</control_delay>
       <steering_lock_time>1.5</steering_lock_time>
+    </plugin>
+  </gazebo>
+
+  <gazebo>
+    <!-- INS Odometry plugin (simulated sensor with noise) -->
+    <plugin filename="libgazebo_ins_odometry.so" name="gazebo_plugins::vehicle_plugins::INSOdometryPlugin">
+      <ros>
+        <namespace>/$(arg namespace)</namespace>
+      </ros>
+      <noise_params>$(find qutms_sim)/config/vehicle_params.yaml</noise_params>
+      <publish_rate>50.0</publish_rate>
+      <odom_frame>track</odom_frame>
+      <base_frame>base_footprint</base_frame>
+      <topic_name>odometry</topic_name>
+      <enable_ground_truth>true</enable_ground_truth>
+      <ground_truth_topic_name>odometry/ground_truth</ground_truth_topic_name>
     </plugin>
   </gazebo>
 

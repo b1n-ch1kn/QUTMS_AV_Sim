@@ -500,11 +500,190 @@ nav_msgs::msg::Odometry stateToOdom(const State &state, const rclcpp::Time &stam
 ## Phase 3: Feature Enhancements (In Planning)
 
 **Target:** Next development phase  
-**Focus:** Sensor expansion, ROS 2 Control, system integration
+**Focus:** Modular architecture, sensor expansion, ROS 2 Control, system integration
 
-### Sprint 1: Visualization & Control (High Priority)
+### Sprint 1: Modular Plugin System (High Priority) 🚀
 
-#### 3.1.1 Vehicle Mesh Visualization Fix
+**WHY THIS IS FIRST:** The current monolithic `gazebo_vehicle_plugin` mixes concerns (dynamics, sensors, control, TF). Separating into modular plugins enables:
+- Independent development/testing of features
+- Easy addition/removal of sensors without touching core code
+- Better code organization and maintainability
+- Reusable plugins across different vehicle configurations
+- Foundation for all future enhancements
+
+Plugins will be refactored into a modular architecture where each plugin is a standalone GZ Sim plugin (`.so` file) loaded independently via URDF. Plugins communicate through ECM components and ROS topics.
+
+**Current State:** `gazebo_vehicle_plugin` contains:
+- Vehicle dynamics/model simulation
+- INS odometry publishing (noisy sensor)
+- Ground truth odometry publishing
+- TF broadcasting
+- Control input handling (Ackermann/Twist)
+- Joint state publishing
+- Reset service
+
+**Target State:** Separate plugins:
+- `vehicle_dynamics_plugin` - Core vehicle model, state updates, ground truth
+- `ins_odometry_plugin` - Simulated INS sensor (noisy odometry)
+- `vehicle_control_plugin` - Control input handling (Ackermann/Twist)
+- `tf_broadcaster_plugin` - TF tree publishing
+- `joint_state_publisher_plugin` - Steering joint visualization
+
+---
+
+#### 3.1.1 INS Odometry Plugin (Phase 1) ✅ COMPLETE
+
+**Goal:** Extract INS odometry publishing into independent sensor plugin
+
+- [x] **Architecture design** (Decided: Separate GZ Sim plugins, ECM state sharing)
+- [x] Create `gazebo_ins_odometry_plugin` directory structure
+  - [x] `include/gazebo_ins_odometry_plugin/ins_odometry.hpp`
+  - [x] `src/ins_odometry.cpp`
+  - [x] `CMakeLists.txt`
+- [x] Implement INS odometry plugin
+  - [x] Implement `ISystemConfigure` interface
+  - [x] Implement `ISystemPostUpdate` interface (read state after physics)
+  - [x] Read vehicle pose from ECM `Pose` component
+  - [x] Read vehicle velocity from ECM `LinearVelocity`/`AngularVelocity` components
+  - [x] Load noise parameters from SDF
+  - [x] Apply noise model to pose/velocity
+  - [x] Publish to `/sim/odometry` ROS topic
+  - [x] Register plugin with GZ_ADD_PLUGIN
+- [x] **Ground truth capability added**
+  - [x] `<enable_ground_truth>` SDF parameter
+  - [x] Optional ground truth publisher
+  - [x] Configurable topic names for both noisy and GT
+  - [x] Single ECM read publishes both outputs
+- [x] Create noise model
+  - [x] Load standard deviations from YAML/SDF
+  - [x] Reuse existing Noise class from vehicle plugin
+  - [x] Apply to position, orientation, velocities
+  - [x] Match existing noise characteristics
+- [x] Update vehicle plugin
+  - [x] Remove noisy odometry publishing code
+  - [x] Remove ground truth odometry publishing code
+  - [x] Remove motion_noise member
+  - [x] Remove odometry publishers
+  - [x] Keep state_odom for internal vehicle model use
+  - [x] Ensure ECM components are written correctly
+  - [x] Verify state is accessible to other plugins
+- [x] Update CMakeLists.txt
+  - [x] Add new plugin to build
+  - [x] ament_cmake_auto pattern
+  - [x] Install rules
+- [x] Update URDF to load both plugins
+  - [x] Add `<plugin>` tag for `ins_odometry_plugin`
+  - [x] Configure noise parameters in SDF
+  - [x] Configure ground truth settings
+  - [x] Keep existing `vehicle_plugin` tag
+- [x] Build and compile
+  - [x] Successfully builds with no errors
+  - [x] Both plugins compile independently
+
+**Success Criteria:** ✅ ALL MET
+- ✅ INS odometry can be enabled/disabled by adding/removing plugin from URDF
+- ✅ INS plugin works independently of vehicle dynamics changes
+- ✅ Noise parameters configurable via SDF
+- ✅ Ground truth publishing optional and configurable per-plugin
+- ✅ No behavioral change from user perspective (topics unchanged)
+- ✅ Clean separation of concerns (dynamics vs. sensing)
+
+**Configuration Pattern Established:**
+```xml
+<plugin filename="libgazebo_ins_odometry.so" ...>
+  <enable_ground_truth>true</enable_ground_truth>
+  <topic_name>odometry</topic_name>
+  <ground_truth_topic_name>odometry/ground_truth</ground_truth_topic_name>
+</plugin>
+```
+
+This pattern will be followed for all future sensor plugins (camera, GPS, IMU, etc.).
+
+---
+
+#### 3.1.2 Control Plugin Separation (Phase 2)
+
+**Goal:** Extract control input handling into independent plugin
+
+- [ ] Create `gazebo_vehicle_control_plugin`
+  - [ ] Directory and file structure
+  - [ ] Header and source files
+  - [ ] CMakeLists.txt
+- [ ] Implement control plugin
+  - [ ] Subscribe to `/sim/control/ackermann_cmd`
+  - [ ] Subscribe to `/sim/control/twist_cmd`
+  - [ ] Convert commands to vehicle inputs
+  - [ ] Write desired inputs to ECM custom component
+  - [ ] Handle command timeouts
+- [ ] Create custom ECM component for control inputs
+  - [ ] `VehicleControlInput` component (throttle, steering)
+  - [ ] Register component type
+  - [ ] Document component structure
+- [ ] Update vehicle dynamics plugin
+  - [ ] Remove Ackermann/Twist subscribers
+  - [ ] Read control inputs from ECM component
+  - [ ] Apply inputs to vehicle model
+  - [ ] Maintain same behavior
+- [ ] Test control separation
+  - [ ] Verify both command types work
+  - [ ] Test timeout behavior
+  - [ ] Validate response matches original
+
+---
+
+#### 3.1.3 TF Broadcaster Plugin (Phase 3)
+
+**Goal:** Extract TF publishing into independent plugin
+
+- [ ] Create `gazebo_tf_broadcaster_plugin`
+  - [ ] Plugin structure
+  - [ ] Header/source files
+- [ ] Implement TF broadcaster
+  - [ ] Read vehicle pose from ECM
+  - [ ] Create TF broadcaster
+  - [ ] Publish configured transforms
+  - [ ] Support multiple frame configurations
+- [ ] Make TF configurable
+  - [ ] Frame IDs from SDF parameters
+  - [ ] Optional transforms
+  - [ ] Update rate
+- [ ] Update vehicle plugin
+  - [ ] Remove TF broadcasting code
+  - [ ] Verify pose components still written
+- [ ] Test TF separation
+  - [ ] Verify TF tree intact
+  - [ ] Check frame rates
+  - [ ] Validate with RViz
+
+---
+
+#### 3.1.4 Joint State Publisher Plugin (Phase 4)
+
+**Goal:** Extract joint state publishing for visualization
+
+- [ ] Create `gazebo_joint_state_publisher_plugin`
+- [ ] Implement joint state publishing
+  - [ ] Read joint positions from ECM
+  - [ ] Publish to `/sim/joint_states/steering`
+  - [ ] Support configurable joint list
+- [ ] Test with RViz
+  - [ ] Verify steering visualization works
+  - [ ] Check update rate
+
+---
+
+**Plugin Architecture Benefits:**
+- ✅ Loadable via URDF configuration (no recompilation)
+- ✅ Easy addition/removal of features
+- ✅ Self-contained with clear dependencies
+- ✅ Foundation for future sensor plugins
+- ✅ Support multiple vehicle configurations
+
+---
+
+### Sprint 2: Visualization & Control (High Priority)
+
+#### 3.2.1 Vehicle Mesh Visualization Fix
 - [ ] Debug mesh rendering in GZ Sim GUI
 - [ ] Check URDF mesh file paths
 - [ ] Verify mesh files load in GZ Sim standalone
@@ -519,7 +698,7 @@ nav_msgs::msg::Odometry stateToOdom(const State &state, const rclcpp::Time &stam
 
 ---
 
-#### 3.1.2 ROS 2 Control Integration
+#### 3.2.2 ROS 2 Control Integration
 - [ ] Install `gz_ros2_control` package
 - [ ] Create hardware interface for simulated vehicle
   - [ ] Define joint interfaces (steering joints)
@@ -562,7 +741,7 @@ nav_msgs::msg::Odometry stateToOdom(const State &state, const rclcpp::Time &stam
 
 ---
 
-#### 3.1.3 System Integration Testing
+#### 3.2.3 System Integration Testing
 - [ ] Test on Ubuntu 24.04 + ROS 2 Jazzy (actual hardware)
 - [ ] Full autonomous lap with QUTMS_Driverless stack
   - [ ] Launch simulator
@@ -589,9 +768,9 @@ nav_msgs::msg::Odometry stateToOdom(const State &state, const rclcpp::Time &stam
 
 ---
 
-### Sprint 2: Sensor Expansion (Medium Priority)
+### Sprint 3: Sensor Expansion (Medium Priority)
 
-#### 3.2.1 Camera Sensor Integration
+#### 3.3.1 Camera Sensor Integration
 - [ ] Configure GZ Sim camera sensor
   - [ ] Add camera to vehicle URDF
   - [ ] Configure resolution (e.g., 1280x720)
@@ -626,7 +805,7 @@ nav_msgs::msg::Odometry stateToOdom(const State &state, const rclcpp::Time &stam
 
 ---
 
-#### 3.2.2 IMU Sensor Integration
+#### 3.3.2 IMU Sensor Integration
 - [ ] Configure GZ Sim IMU sensor
   - [ ] Add IMU to vehicle URDF
   - [ ] Set update rate (e.g., 100Hz)
@@ -656,7 +835,7 @@ nav_msgs::msg::Odometry stateToOdom(const State &state, const rclcpp::Time &stam
 
 ---
 
-#### 3.2.3 GPS/GNSS Sensor Integration
+#### 3.3.3 GPS/GNSS Sensor Integration
 - [ ] Configure GZ Sim GNSS sensor
   - [ ] Add GPS to vehicle URDF
   - [ ] Set update rate (e.g., 10Hz)
@@ -686,7 +865,7 @@ nav_msgs::msg::Odometry stateToOdom(const State &state, const rclcpp::Time &stam
 
 ---
 
-#### 3.2.4 INS Fusion Plugin
+#### 3.3.4 INS Fusion Plugin
 - [ ] Design sensor fusion architecture
   - [ ] Choose fusion algorithm (EKF, UKF, complementary filter)
   - [ ] Define state vector
@@ -724,9 +903,9 @@ nav_msgs::msg::Odometry stateToOdom(const State &state, const rclcpp::Time &stam
 
 ---
 
-### Sprint 3: Advanced Vehicle Dynamics (Medium Priority)
+### Sprint 4: Advanced Vehicle Dynamics (Low Priority)
 
-#### 3.3.1 Ackermann Steering Model
+#### 3.4.1 Ackermann Steering Model
 - [ ] Research Ackermann geometry
 - [ ] Implement full Ackermann steering
   - [ ] Model front/rear axle independently
@@ -748,7 +927,7 @@ nav_msgs::msg::Odometry stateToOdom(const State &state, const rclcpp::Time &stam
 
 ---
 
-#### 3.3.2 Tire Dynamics Model
+#### 3.4.2 Tire Dynamics Model
 - [ ] Research tire models (Pacejka, brush model, etc.)
 - [ ] Implement tire slip model
   - [ ] Longitudinal slip
@@ -783,7 +962,7 @@ nav_msgs::msg::Odometry stateToOdom(const State &state, const rclcpp::Time &stam
 
 ---
 
-#### 3.3.3 Suspension Dynamics
+#### 3.4.3 Suspension Dynamics
 - [ ] Design suspension model
   - [ ] Choose suspension type (double wishbone, MacPherson, etc.)
   - [ ] Model spring-damper system
@@ -813,7 +992,7 @@ nav_msgs::msg::Odometry stateToOdom(const State &state, const rclcpp::Time &stam
 
 ---
 
-#### 3.3.4 Road Conditions & Surface Modeling
+#### 3.4.4 Road Conditions & Surface Modeling
 - [ ] Implement wet/dry surface grip variation
   - [ ] Friction coefficient adjustment
   - [ ] Surface parameter in world files
@@ -835,42 +1014,7 @@ nav_msgs::msg::Odometry stateToOdom(const State &state, const rclcpp::Time &stam
   - [ ] Water effects (if feasible)
   - [ ] HUD or topic for current conditions
 
----
 
-### Sprint 4: Modular Plugin System & Quality (Medium/Low Priority)
-
-#### 3.4.1 Modular Plugin Architecture
-- [ ] Design plugin system architecture
-  - [ ] Define plugin interfaces
-  - [ ] Separation of concerns (dynamics, sensors, control)
-  - [ ] Plugin discovery mechanism
-- [ ] Separate vehicle dynamics from sensors
-  - [ ] Refactor to independent plugins
-  - [ ] Communication via ROS topics/services
-  - [ ] Clean dependencies
-- [ ] Create plugin configuration system (YAML-based)
-  - [ ] Plugin selection via config file
-  - [ ] Parameter specification per plugin
-  - [ ] Runtime loading/unloading
-- [ ] Allow runtime plugin loading/unloading
-  - [ ] Service to load plugins
-  - [ ] Service to unload plugins
-  - [ ] Safe state management
-- [ ] Create example plugins
-  - [ ] Minimal vehicle dynamics plugin
-  - [ ] Minimal sensor plugin
-  - [ ] Template for new plugins
-- [ ] Support multiple vehicle models
-  - [ ] Different vehicle configurations
-  - [ ] Switchable via parameter
-  - [ ] Shared infrastructure
-
-**Plugin Architecture Goals:**
-- Loadable via configuration files (no recompilation)
-- Easy addition/removal
-- Self-contained with clear dependencies
-- Common interfaces for similar types
-- Hot-swappable where possible
 
 ---
 

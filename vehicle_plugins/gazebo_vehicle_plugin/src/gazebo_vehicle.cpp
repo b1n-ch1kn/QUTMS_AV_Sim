@@ -48,10 +48,6 @@ void VehiclePlugin::Configure(
     initParams(sdf);
 
     // ROS Publishers
-    // Odometry
-    odometry_pub = node->create_publisher<nav_msgs::msg::Odometry>("odometry", 1);
-    gt_odometry_pub = node->create_publisher<nav_msgs::msg::Odometry>("odometry/ground_truth", 1);
-
     // RVIZ joint visuals
     joint_state_pub = node->create_publisher<sensor_msgs::msg::JointState>("joint_states/steering", 1);
 
@@ -87,7 +83,6 @@ void VehiclePlugin::initParams(const std::shared_ptr<const sdf::Element> &sdf) {
         std::string vehicle_yaml_name = sdf->Get<std::string>("vehicle_params");
         RCLCPP_INFO(node->get_logger(), "Loading vehicle params from: %s", vehicle_yaml_name.c_str());
         vehicle_model = std::make_unique<VehicleModelBike>(vehicle_yaml_name);
-        motion_noise = std::make_unique<Noise>(vehicle_yaml_name);
     } else {
         RCLCPP_FATAL(node->get_logger(), 
                     "gazebo_vehicle plugin missing <vehicle_params> parameter in URDF, cannot proceed");
@@ -239,19 +234,6 @@ void VehiclePlugin::setModelState(gz::sim::EntityComponentManager &ecm) {
     }
 }
 
-void VehiclePlugin::publishVehicleOdom() {
-    // Publish ground truth
-    if (gt_odometry_pub->get_subscription_count() > 0) {
-        gt_odometry_pub->publish(state_odom);
-    }
-
-    // Apply noise and publish
-    nav_msgs::msg::Odometry odom_noisy = motion_noise->applyNoise(state_odom);
-    if (odometry_pub->get_subscription_count() > 0) {
-        odometry_pub->publish(odom_noisy);
-    }
-}
-
 void VehiclePlugin::publishTf() {
     // Base->Odom/Map
     tf2::Transform base_to_odom;
@@ -396,8 +378,7 @@ void VehiclePlugin::update(const gz::sim::UpdateInfo &info,
     rclcpp::Time publish_time(std::chrono::duration_cast<std::chrono::nanoseconds>(info.simTime).count());
     state_odom = stateToOdom(state, publish_time);
 
-    // Publish car states
-    publishVehicleOdom();
+    // Publish TF (odometry now published by INS plugin)
     publishTf();
 }
 

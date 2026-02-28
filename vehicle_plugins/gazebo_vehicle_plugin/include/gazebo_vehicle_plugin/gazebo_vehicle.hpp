@@ -48,7 +48,6 @@
 #include <gz/math/Vector3.hh>
 
 // Local includes
-#include "gazebo_vehicle_plugin/noise.hpp"
 #include "gazebo_vehicle_plugin/utils.hpp"
 #include "gazebo_vehicle_plugin/vehicle_model_bike.hpp"
 #include "gazebo_vehicle_plugin/vehicle_state.hpp"
@@ -78,7 +77,6 @@ class VehiclePlugin : public gz::sim::System,
     bool resetVehiclePosition(std::shared_ptr<std_srvs::srv::Trigger::Request> request,
                               std::shared_ptr<std_srvs::srv::Trigger::Response> response);
     void setModelState(gz::sim::EntityComponentManager &ecm);
-    void publishVehicleOdom();
     void publishTf();
     void update(const gz::sim::UpdateInfo &info, gz::sim::EntityComponentManager &ecm);
     void onAckermannCmd(const ackermann_msgs::msg::AckermannDriveStamped::SharedPtr msg);
@@ -94,7 +92,6 @@ class VehiclePlugin : public gz::sim::System,
     nav_msgs::msg::Odometry state_odom;
     Control input, output;
     State state;
-    std::unique_ptr<Noise> motion_noise;
     gz::math::Pose3d offset;
 
     // GZ Sim
@@ -114,8 +111,6 @@ class VehiclePlugin : public gz::sim::System,
     std::unique_ptr<tf2_ros::TransformBroadcaster> tf_br;
 
     // ROS Publishers
-    rclcpp::Publisher<nav_msgs::msg::Odometry>::SharedPtr odometry_pub;
-    rclcpp::Publisher<nav_msgs::msg::Odometry>::SharedPtr gt_odometry_pub;
     rclcpp::Publisher<sensor_msgs::msg::JointState>::SharedPtr joint_state_pub;
 
     // ROS Subscriptions
