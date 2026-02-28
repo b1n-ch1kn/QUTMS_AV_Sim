@@ -6,7 +6,8 @@ if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
 endif()
 
 # find dependencies
-find_package(ament_cmake REQUIRED)
+find_package(ament_cmake_auto REQUIRED)
+ament_auto_find_build_dependencies()
 
 # launch folder
 install(DIRECTORY
@@ -20,4 +21,4 @@ install(DIRECTORY
   DESTINATION share/${PROJECT_NAME}
 )
 
-ament_package()
+ament_auto_package()
