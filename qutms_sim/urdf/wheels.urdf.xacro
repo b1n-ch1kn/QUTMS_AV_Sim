@@ -79,7 +79,23 @@
       <limit lower="${config['input_ranges']['steering']['min']}" upper="${config['input_ranges']['steering']['max']}" effort="10000000" velocity="1000000"/>
     </joint>
 
-    <link name="${lr_prefix}_steering_hinge">
+    <link name="${lr_prefix}_steering_hinge"> 
+      <!-- Small visual/collision to ensure proper entity registration in GZ Sim -->
+      <visual>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <geometry>
+          <sphere radius="0.02"/>
+        </geometry>
+        <material name="black"/>
+      </visual>
+      
+      <collision>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <geometry>
+          <sphere radius="0.02"/>
+        </geometry>
+      </collision>
+
       <inertial>
         <origin xyz="0 0 0" rpy="0 0 0" />
         <mass value="${steering_hinge_mass}"/>

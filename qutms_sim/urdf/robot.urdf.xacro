@@ -15,9 +15,6 @@
 
     <!--  GZ Sim plugins  -->
     <gazebo>
-        <!-- Physics system needed for GZ Sim -->
-        <plugin filename="gz-sim-physics-system" name="gz::sim::systems::Physics"/>
-        
         <!-- Vehicle plugin -->
         <plugin filename="libgazebo_vehicle.so" name="gazebo_plugins::vehicle_plugins::VehiclePlugin">
             <ros>
