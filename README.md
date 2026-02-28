@@ -1,41 +1,29 @@
 # QUTMS_AV_Sim
 
-> **⚠️ ROS 2 Jazzy Migration in Progress**  
-> This repository is currently being migrated from ROS 2 Humble (Ubuntu 22.04, Gazebo Classic) to ROS 2 Jazzy (Ubuntu 24.04, GZ Sim/Harmonic).  
-> 
-> - ✅ **Vehicle plugin migrated** to GZ Sim System interface
-> - ✅ **Launch files updated** for ros_gz_sim  
-> - ✅ **URDF updated** for GZ Sim sensors
-> - ⏳ **Cone detection plugin** migration in progress
-> - ⏳ **Testing and validation** required
+> **📍 ROS 2 Jazzy (Ubuntu 24.04)**  
+> This simulator uses ROS 2 Jazzy Jalisco with GZ Sim (Harmonic).  
 >
 > **Documentation:**
-> - [Jazzy Migration Status](./JAZZY_MIGRATION_STATUS.md) - Current progress and remaining work
-> - [Quick Start Guide (Jazzy)](./QUICKSTART_JAZZY.md) - How to use with ROS 2 Jazzy
-> - [Migration Guide](./MIGRATION_GUIDE.md) - Technical details of API changes
-> 
-> For the stable Humble version, see the `humble` branch (to be created).
+> - [Quick Start Guide](./QUICKSTART_JAZZY.md) - Setup and installation instructions
+> - [Migration Guide](./MIGRATION_GUIDE.md) - If upgrading from Gazebo Classic
+> - [Migration Status](./JAZZY_MIGRATION_STATUS.md) - Current development status
 
 ## Overview
 
-QUTMS_AV_Sim is designed to facilitate development of autonomous systems with little-to-no prior ROS 2 experience. Primarily, it is intended to be used by the Queensland University of Technology Motorsport (QUTMS) team to develop their autonomous vehicle software in ROS 2. However, it is open source and can be used by anyone.
-It makes use of the [Gazebo](http://gazebosim.org/) simulator for lightweight ROS 2 specific vehicle URDFs.
+QUTMS_AV_Sim is designed to facilitate development of autonomous systems with little-to-no prior ROS 2 experience. Primarily, it is intended to be used by the Queensland University of Technology Motorsport (QUTMS) team to develop their autonomous vehicle software in ROS 2. However, it is open source and can be used by anyone, as is aligned with QUTMS's vision. QUTMS_AV_Sim makes use of the [Gazebo](http://gazebosim.org/) simulator for lightweight ROS 2 specific vehicle URDFs.
 
-QUTMS has and continues to use in varying capacities, forked versions the Formula Student Driverless Simulator (FSDS) and the Edinburgh University Formula Student Simulator (EUFS Sim). Some Gazebos and ROS 2 plugins have also been forked from eufs_sim for this project.
+QUTMS has and continues to use in varying capacities, forked versions the Formula Student Driverless Simulator (FSDS) and the Edinburgh University Formula Student Simulator (EUFS Sim). Some Gazebo and ROS 2 source code has also been forked from eufs_sim for this project.
 
 ## Installation
 
 ### Prerequisites
 
-**For ROS 2 Jazzy (Ubuntu 24.04):**
-- Follow the [Quick Start Guide (Jazzy)](./QUICKSTART_JAZZY.md) for detailed Jazzy setup instructions
+- Ubuntu 24.04
 - ROS 2 Jazzy Jalisco - [Installation Guide](https://docs.ros.org/en/jazzy/Installation.html)
 - GZ Sim (Harmonic) - Installed with `gz-harmonic` package
+- ros_gz packages - `ros-jazzy-ros-gz`, `ros-jazzy-ros-gz-sim`, `ros-jazzy-ros-gz-bridge`
 
-**For ROS 2 Humble (Ubuntu 22.04) - Legacy:**
-- ROS 2 Humble Hawksbill - [Installation Guide](https://docs.ros.org/en/humble/Installation.html)
-- Gazebo Classic 11 - Usually installed with `ros-humble-gazebo-ros-pkgs`
-- See `humble` branch (to be created) for Humble-specific instructions
+For detailed setup instructions, see the [Quick Start Guide](./QUICKSTART_JAZZY.md).
 
 ```
 cd <YOUR ROS 2 WORKSPACE<> # eg. QUTMS/
