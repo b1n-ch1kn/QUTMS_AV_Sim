@@ -19,42 +19,33 @@ def get_argument(context, arg):
 
 
 def gen_world(context, *args, **kwargs):
-    track = str(get_argument(context, "track") + ".world")
+    track = str(get_argument(context, "track") + ".sdf")
 
-    MODELS = os.environ.get("GAZEBO_MODEL_PATH")
-    RESOURCES = os.environ.get("GAZEBO_RESOURCE_PATH")
     QUTMS = os.path.expanduser(os.environ.get("QUTMS_WS"))
     DISTRO = os.environ.get("ROS_DISTRO")
 
-    os.environ["GAZEBO_PLUGIN_PATH"] = (
-        QUTMS + "/install/vehicle_plugins:" + "/opt/ros/" + DISTRO
+    # Set GZ Sim environment variables
+    os.environ["GZ_SIM_SYSTEM_PLUGIN_PATH"] = (
+        QUTMS + "/install/vehicle_plugins/lib:" + "/opt/ros/" + DISTRO + "/lib"
     )
-    os.environ["GAZEBO_MODEL_PATH"] = sim_pkg + "/models:" + str(MODELS)
-    os.environ["GAZEBO_RESOURCE_PATH"] = (
-        sim_pkg
-        + "/meshes:"
-        + sim_pkg
-        + "/materials:"
-        + sim_pkg
-        + "/meshes:"
-        + str(RESOURCES)
+    os.environ["GZ_SIM_RESOURCE_PATH"] = (
+        sim_pkg + "/models:" + 
+        sim_pkg + "/meshes:" +
+        sim_pkg + "/materials:" +
+        os.environ.get("GZ_SIM_RESOURCE_PATH", "")
     )
 
     world_path = join(sim_pkg, "worlds", track)
 
-    gazebo_launch = join(get_package_share_directory("gazebo_ros"), "launch", "gazebo.launch.py")
+    gz_sim_launch = join(get_package_share_directory("ros_gz_sim"), "launch", "gz_sim.launch.py")
     params_file = join(sim_pkg, "config", "user_config.yaml")
 
     return [
         IncludeLaunchDescription(
-            launch_description_source=PythonLaunchDescriptionSource(gazebo_launch),
+            launch_description_source=PythonLaunchDescriptionSource(gz_sim_launch),
             launch_arguments=[
-                ("verbose", "false"),
-                ("pause", "false"),
-                ("gui", "false"),
-                ("world", world_path),
-                ("params_file", params_file),
-                ("gdb", "false"),
+                ("gz_args", f"-r {world_path}"),
+                ("on_exit_shutdown", "true"),
             ],
         ),
     ]
@@ -105,11 +96,11 @@ def spawn_car(context, *args, **kwargs):
             actions=[
                 Node(
                     name="spawn_robot",
-                    package="gazebo_ros",
-                    executable="spawn_entity.py",
+                    package="ros_gz_sim",
+                    executable="create",
                     output="screen",
                     arguments=[
-                        "-entity",
+                        "-name",
                         "QEV-3D",
                         "-file",
                         urdf_path,
@@ -117,12 +108,10 @@ def spawn_car(context, *args, **kwargs):
                         x,
                         "-y",
                         y,
+                        "-z",
+                        "0.5",
                         "-Y",
                         yaw,
-                        "-spawn_service_timeout",
-                        "60.0",
-                        "-robot_namespace",
-                        namespace,
                         "--ros-args",
                         "--log-level",
                         "warn",

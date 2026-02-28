@@ -13,21 +13,26 @@
     <xacro:include filename="$(find qutms_sim)/urdf/wheels.urdf.xacro"/>
     <xacro:include filename="$(find qutms_sim)/urdf/lidar.urdf.xacro"/>
 
-    <!--  Gazebo ROS 2 plugins  -->
+    <!--  GZ Sim plugins  -->
     <gazebo>
-        <!-- plugin name also is ROS 2 node name -->
-        <plugin name="vehicle_plugin" filename="libgazebo_vehicle.so"></plugin>
-        <ros>
-          <!-- could make this an arg -->
-          <namespace>/$(arg namespace)</namespace>
-        </ros>
+        <!-- Physics system needed for GZ Sim -->
+        <plugin filename="gz-sim-physics-system" name="gz::sim::systems::Physics"/>
+        
+        <!-- Vehicle plugin -->
+        <plugin filename="libgazebo_vehicle.so" name="gazebo_plugins::vehicle_plugins::VehiclePlugin">
+            <ros>
+                <namespace>/$(arg namespace)</namespace>
+            </ros>
+        </plugin>
     </gazebo>
 
     <gazebo>
-        <plugin name="cone_detection_plugin" filename="libgazebo_cone_detection.so"></plugin>
-        <ros>
-          <namespace>/$(arg namespace)</namespace>
-        </ros>
+        <!-- Cone detection plugin -->
+        <plugin filename="libgazebo_cone_detection.so" name="gazebo_plugins::vehicle_plugins::ConeDetectionPlugin">
+            <ros>
+                <namespace>/$(arg namespace)</namespace>
+            </ros>
+        </plugin>
     </gazebo>
 
     <!-- Vehicle Elements -->

@@ -67,16 +67,20 @@
           </noise>
         </ray>
 
-        <plugin name="laserscan_plugin" filename="libgazebo_ros_lidar.so">
-          <ros>
-            <namespace>/${prefix}</namespace>
-            <remapping>~/out:=scan</remapping>
-          </ros>
-          <frame_name>${prefix}</frame_name>
-          <radiation_type>infrared</radiation_type>
-          <output_type>sensor_msgs/LaserScan</output_type>
+        <plugin name="laserscan_sensor" filename="gz-sim-sensors-system" 
+                name="gz::sim::systems::Sensors">
+          <render_engine>ogre2</render_engine>
         </plugin>
       </sensor>
+      
+      <!-- Use ros_gz_bridge to publish lidar data -->
+      <plugin filename="libros_gz_bridge" name="ros_gz_bridge::RosGzBridge">
+        <ros>
+          <namespace>/${namespace}</namespace>
+          <remapping>/${prefix}/scan:=scan</remapping>
+        </ros>
+        <topic name="/${prefix}/scan" type="sensor_msgs/msg/LaserScan"/>
+      </plugin>
     </gazebo>
   </xacro:macro>
 </robot>

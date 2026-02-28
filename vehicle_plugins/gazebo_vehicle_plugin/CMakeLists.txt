@@ -4,8 +4,7 @@ add_library(gazebo_vehicle SHARED
   src/gazebo_vehicle.cpp)
 
 ament_target_dependencies(gazebo_vehicle
-  "gazebo_dev"
-  "gazebo_ros"
+  "ros_gz"
   "rclcpp"
   "nav_msgs"
   "tf2"
@@ -17,6 +16,9 @@ ament_target_dependencies(gazebo_vehicle
   "sensor_msgs"
   "yaml-cpp"
   "geometry_msgs"
+  "gz-physics7"
+  "gz-transport13"
+  "gz-plugin2"
 )
 
 target_include_directories(gazebo_vehicle PUBLIC include)

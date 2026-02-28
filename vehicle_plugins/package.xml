@@ -11,9 +11,11 @@
 
   <depend>rclcpp</depend>
 
-  <depend>gazebo</depend>
-  <depend>gazebo_dev</depend>
-  <depend>gazebo_ros</depend>
+  <depend>gz-sim8</depend>
+  <depend>gz-plugin2</depend>
+  <depend>gz-transport13</depend>
+  <depend>gz-sensors8</depend>
+  <depend>ros_gz</depend>
 
   <depend>tf2</depend>
   <depend>tf2_ros</depend>

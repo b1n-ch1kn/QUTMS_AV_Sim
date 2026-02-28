@@ -5,12 +5,15 @@ add_library(gazebo_cone_detection SHARED
   src/gazebo_cone_detection.cpp)
 
 ament_target_dependencies(gazebo_cone_detection
-  "gazebo_dev"
-  "gazebo_ros"
+  "ros_gz"
   "rclcpp"
   "std_srvs"
   "visualization_msgs"
-  "driverless_msgs")
+  "driverless_msgs"
+  "gz-physics7"
+  "gz-transport13"
+  "gz-plugin2"
+)
 
 target_include_directories(gazebo_cone_detection PUBLIC include)
 target_include_directories(gazebo_cone_detection PUBLIC ${PROJECT_SOURCE_DIR}/include)

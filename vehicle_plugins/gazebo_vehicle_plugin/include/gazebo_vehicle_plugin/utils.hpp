@@ -1,10 +1,8 @@
 #pragma once
 
-#include <gazebo/common/Time.hh>
-#include <gazebo/physics/Model.hh>
-#include <gazebo/physics/Link.hh>
 #include <geometry_msgs/msg/quaternion.hpp>
 #include <rclcpp/rclcpp.hpp>
+#include <chrono>
 
 namespace gazebo_plugins {
 namespace vehicle_plugins {
@@ -50,8 +48,6 @@ std::vector<double> to_euler(geometry_msgs::msg::Quaternion &q) {
 
     return {roll, pitch, yaw};
 }
-
-double calc_dt(gazebo::common::Time start, gazebo::common::Time end) { return (end - start).Double(); }
 
 }  // namespace vehicle_plugins
 }  // namespace gazebo_plugins
