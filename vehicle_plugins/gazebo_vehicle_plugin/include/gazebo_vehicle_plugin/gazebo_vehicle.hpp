@@ -84,7 +84,7 @@ class VehiclePlugin : public gz::sim::System,
     void onAckermannCmd(const ackermann_msgs::msg::AckermannDriveStamped::SharedPtr msg);
     void onTwistCmd(const geometry_msgs::msg::Twist::SharedPtr msg);
 
-    nav_msgs::msg::Odometry stateToOdom(const State &state);
+    nav_msgs::msg::Odometry stateToOdom(const State &state, const rclcpp::Time &stamp);
     State odomToState(const nav_msgs::msg::Odometry &odom);
 
     std::shared_ptr<rclcpp::Node> node;

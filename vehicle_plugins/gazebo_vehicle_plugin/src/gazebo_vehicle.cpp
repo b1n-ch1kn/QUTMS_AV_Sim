@@ -273,9 +273,9 @@ void VehiclePlugin::publishTf() {
     tf_br->sendTransform(transform_stamped);
 }
 
-nav_msgs::msg::Odometry VehiclePlugin::stateToOdom(const State &state) {
+nav_msgs::msg::Odometry VehiclePlugin::stateToOdom(const State &state, const rclcpp::Time &stamp) {
     nav_msgs::msg::Odometry msg;
-    msg.header.stamp = node->now();
+    msg.header.stamp = stamp;
     msg.header.frame_id = odom_frame;
     msg.child_frame_id = base_frame;
 
@@ -369,9 +369,12 @@ void VehiclePlugin::update(const gz::sim::UpdateInfo &info,
         }
     }
 
+    // Convert sim time to ROS time
+    rclcpp::Time current_time(std::chrono::duration_cast<std::chrono::nanoseconds>(info.simTime).count());
+    
     // Publish joint states
     sensor_msgs::msg::JointState joint_state;
-    joint_state.header.stamp = node->now();
+    joint_state.header.stamp = current_time;
     joint_state.name.push_back("left_steering_hinge_joint");
     joint_state.name.push_back("right_steering_hinge_joint");
     joint_state.position.push_back(output.steering);
@@ -389,7 +392,9 @@ void VehiclePlugin::update(const gz::sim::UpdateInfo &info,
     }
     last_published_time = info.simTime;
 
-    state_odom = stateToOdom(state);
+    // Convert sim time to ROS time for publishing
+    rclcpp::Time publish_time(std::chrono::duration_cast<std::chrono::nanoseconds>(info.simTime).count());
+    state_odom = stateToOdom(state, publish_time);
 
     // Publish car states
     publishVehicleOdom();

@@ -1,5 +1,6 @@
 #include "gazebo_cone_detection_plugin/gazebo_cone_detection.hpp"
 
+#include <gz/sim/Util.hh>
 #include <gz/sim/components/Name.hh>
 #include <gz/sim/components/Pose.hh>
 #include <gz/sim/components/Link.hh>
@@ -122,11 +123,8 @@ void ConeDetectionPlugin::PreUpdate(const gz::sim::UpdateInfo &info,
             return;
         }
 
-        // Get initial car pose
-        auto poseComp = ecm.Component<gz::sim::components::Pose>(car_link);
-        if (poseComp) {
-            car_initial_pose = poseComp->Data();
-        }
+        // Get initial car world pose (global coordinates)
+        car_initial_pose = gz::sim::worldPose(car_link, ecm);
 
         // Store initial track
         initial_track = get_ground_truth_track(ecm, track_model, info.simTime, map_frame);
@@ -177,12 +175,8 @@ void ConeDetectionPlugin::update(const gz::sim::UpdateInfo &info,
     if (dt_detection >= (1.0 / detection_update_rate)) {
         last_detection_update = curr_time;
         
-        // Get current car pose
-        gz::math::Pose3d car_pose;
-        auto poseComp = ecm.Component<gz::sim::components::Pose>(car_link);
-        if (poseComp) {
-            car_pose = poseComp->Data();
-        }
+        // Get current car world pose (global coordinates)
+        gz::math::Pose3d car_pose = gz::sim::worldPose(car_link, ecm);
 
         if (has_subscribers(detection_pub)) {
             auto lidar_detection = get_sensor_detection(detection_config, car_pose, ground_truth_track);
