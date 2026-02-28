@@ -46,25 +46,29 @@
 
 ### High Priority
 
-#### 1. Cone Detection Plugin Migration
-The `gazebo_cone_detection_plugin` still needs to be migrated to GZ Sim:
-- Update header to use GZ Sim System interface
-- Rewrite source to use ECS for world model access
-- Update cone detection logic to work with GZ Sim's entity system
-- Test cone detection functionality
+#### 1. Cone Detection Plugin Migration ✅ COMPLETED
+The `gazebo_cone_detection_plugin` has been successfully migrated to GZ Sim:
+- ✅ Updated header to use GZ Sim System interface
+- ✅ Rewrote source to use ECS for world model access
+- ✅ Updated cone detection logic to work with GZ Sim's entity system
+- ✅ Updated utils.hpp to use GZ Sim API
+- ⏳ Test cone detection functionality (requires Ubuntu 24.04/Jazzy)
 
-**Files to update:**
+**Files updated:**
 - `/home/wsl/fsae/QUTMS_AV_Sim/vehicle_plugins/gazebo_cone_detection_plugin/include/gazebo_cone_detection_plugin/gazebo_cone_detection.hpp`
 - `/home/wsl/fsae/QUTMS_AV_Sim/vehicle_plugins/gazebo_cone_detection_plugin/src/gazebo_cone_detection.cpp`
 - `/home/wsl/fsae/QUTMS_AV_Sim/vehicle_plugins/gazebo_cone_detection_plugin/include/gazebo_cone_detection_plugin/utils.hpp`
 
-#### 2. World Files Conversion
-Current world files use SDF 1.6 format with `.world` extension:
-- Rename all `.world` files to `.sdf`
-- Consider updating SDF version to 1.8 for better GZ Sim compatibility
-- Update launch file track references to use `.sdf` extension
+**Backup files created:**
+- `gazebo_cone_detection_classic.cpp.backup`
 
-**Files affected:** All files in `/home/wsl/fsae/QUTMS_AV_Sim/qutms_sim/worlds/`
+#### 2. World Files Conversion ✅ COMPLETED
+World files have been renamed from `.world` to `.sdf`:
+- ✅ Renamed all `.world` files to `.sdf` using provided script
+- ⏳ Consider updating SDF version to 1.8 for better GZ Sim compatibility (optional)
+- ⏳ Verify all tracks load in GZ Sim (requires testing)
+
+**Files renamed:** 10 world files in `/home/wsl/fsae/QUTMS_AV_Sim/qutms_sim/worlds/`
 
 #### 3. Test and Validate
 - Build the workspace on Ubuntu 24.04 with ROS 2 Jazzy

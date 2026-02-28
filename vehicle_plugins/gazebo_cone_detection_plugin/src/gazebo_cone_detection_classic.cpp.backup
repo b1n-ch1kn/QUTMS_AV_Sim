@@ -1,49 +1,19 @@
 #include "gazebo_cone_detection_plugin/gazebo_cone_detection.hpp"
 
-#include <gz/sim/components/Name.hh>
-#include <gz/sim/components/Pose.hh>
-#include <gz/sim/components/Link.hh>
-#include <gz/sim/components/LinearVelocity.hh>
-#include <gz/sim/components/AngularVelocity.hh>
-#include <gz/sim/components/Model.hh>
-
 namespace gazebo_plugins {
 namespace vehicle_plugins {
 
-ConeDetectionPlugin::ConeDetectionPlugin() : first_update(true), ecm_ptr(nullptr) {}
+ConeDetectionPlugin::ConeDetectionPlugin() {}
 
-ConeDetectionPlugin::~ConeDetectionPlugin() {}
+ConeDetectionPlugin::~ConeDetectionPlugin() { update_connection.reset(); }
 
-void ConeDetectionPlugin::Configure(
-    const gz::sim::Entity &entity,
-    const std::shared_ptr<const sdf::Element> &sdf,
-    gz::sim::EntityComponentManager &ecm,
-    gz::sim::EventManager &eventMgr)
-{
-    // Currently unused
-    (void)sdf;
-    (void)eventMgr;
+void ConeDetectionPlugin::Load(gazebo::physics::ModelPtr gz_model, sdf::ElementPtr sdf) {
+    node = gazebo_ros::Node::Get(sdf);
 
-    // Storage for later
-    this->_entity = entity;
-    this->_model = gz::sim::Model(entity);
-    
-    // Error checking
-    if (!this->_model.Valid(ecm)) {
-        RCLCPP_ERROR(rclcpp::get_logger("cone_detection_plugin"), "Invalid model entity. Plugin won't run.");
-        return;
-    }
+    RCLCPP_DEBUG(node->get_logger(), "Loading ConeDetectionPlugin");
 
-    // Ensure that ROS2 is initialized
-    if (!rclcpp::ok()) {
-        rclcpp::init(0, nullptr);
-    }
-
-    this->node = std::make_shared<rclcpp::Node>("cone_detection_plugin_node");
-    RCLCPP_INFO(this->node->get_logger(), "Created ROS node inside ConeDetectionPlugin.");
-
-    // Store ECM pointer for reset service
-    ecm_ptr = &ecm;
+    model = gz_model;
+    world = model->GetWorld();
 
     // Initialize parameters
     initParams();
@@ -59,21 +29,38 @@ void ConeDetectionPlugin::Configure(
     reset_cone_pos_srv = node->create_service<std_srvs::srv::Trigger>("reset_cones",
         std::bind(&ConeDetectionPlugin::resetConePosition, this, std::placeholders::_1, std::placeholders::_2));
 
-    // Initialize times
-    last_track_update = std::chrono::steady_clock::duration::zero();
-    last_detection_update = std::chrono::steady_clock::duration::zero();
+    last_track_update = world->SimTime();
+    last_detection_update = world->SimTime();
+
+    update_connection = gazebo::event::Events::ConnectWorldUpdateBegin(std::bind(&ConeDetectionPlugin::update, this));
+
+    //  Store initial track
+    initial_track = get_ground_truth_track(track_model, last_track_update, map_frame);
 
     // Visuals
     initMarkers();
 
-    RCLCPP_INFO(node->get_logger(), "GZ Sim ConeDetectionPlugin Configured");
+    RCLCPP_INFO(node->get_logger(), "ConeDetectionPlugin Loaded");
 }
 
 void ConeDetectionPlugin::initParams() {
     map_frame = node->declare_parameter("map_frame", "map");
     base_frame = node->declare_parameter("base_frame", "base_link");
 
-    // Note: track_model and car_link will be initialized in PreUpdate when ECM is fully populated
+    track_model = world->ModelByName("track");
+    if (track_model == nullptr) {
+        RCLCPP_FATAL(node->get_logger(), "Could not find required model 'track'. Exiting.");
+        exit(1);
+    }
+
+    car_link = model->GetLink(base_frame);
+    if (car_link == nullptr) {
+        RCLCPP_FATAL(node->get_logger(), "Could not find required link <%s> on model <%s>. Exiting.", base_frame.c_str(),
+                     model->GetName().c_str());
+        exit(1);
+    }
+
+    car_inital_pose = car_link->WorldPose();
 
     detection_update_rate = node->declare_parameter("lidar_update_rate", 1.0);
     track_update_rate = node->declare_parameter("track_update_rate", 1.0);
@@ -89,168 +76,66 @@ void ConeDetectionPlugin::initParams() {
     };
 }
 
-void ConeDetectionPlugin::PreUpdate(const gz::sim::UpdateInfo &info,
-                                     gz::sim::EntityComponentManager &ecm)
-{
-    // First update - find track and car link entities
-    if (first_update) {
-        // Find track model by name
-        ecm.Each<gz::sim::components::Model, gz::sim::components::Name>(
-            [&](const gz::sim::Entity &entity,
-                const gz::sim::components::Model *,
-                const gz::sim::components::Name *name) -> bool {
-                if (name->Data() == "track") {
-                    track_model = entity;
-                    RCLCPP_INFO(node->get_logger(), "Found track model entity: %lu", track_model);
-                    return false; // Stop searching
-                }
-                return true; // Continue searching
-            });
-
-        if (track_model == gz::sim::kNullEntity) {
-            RCLCPP_FATAL(node->get_logger(), "Could not find required model 'track'. Exiting.");
-            return;
-        }
-
-        // Find car link
-        car_link = _model.LinkByName(ecm, base_frame);
-        if (car_link == gz::sim::kNullEntity) {
-            RCLCPP_FATAL(node->get_logger(), 
-                        "Could not find required link <%s> on model. Exiting.", base_frame.c_str());
-            return;
-        }
-
-        // Get initial car pose
-        auto poseComp = ecm.Component<gz::sim::components::Pose>(car_link);
-        if (poseComp) {
-            car_initial_pose = poseComp->Data();
-        }
-
-        // Store initial track
-        initial_track = get_ground_truth_track(ecm, track_model, info.simTime, map_frame);
-
-        first_update = false;
-        last_track_update = info.simTime;
-        last_detection_update = info.simTime;
-        
-        RCLCPP_INFO(node->get_logger(), "ConeDetectionPlugin initialized");
-        return;
-    }
-
-    // Spin ROS callbacks
-    rclcpp::spin_some(node);
-
-    update(info, ecm);
-}
-
-void ConeDetectionPlugin::update(const gz::sim::UpdateInfo &info, 
-                                 gz::sim::EntityComponentManager &ecm) 
-{
-    // Publish track
-    // Faster rate than lidar so updates aren't missed
-    auto curr_time = info.simTime;
-    auto dt_track_duration = curr_time - last_track_update;
-    double dt_track = std::chrono::duration<double>(dt_track_duration).count();
-    
-    if (dt_track < (1.0 / track_update_rate)) {
+void ConeDetectionPlugin::update() {
+    // publish track
+    // faster rate than lidar so updates arent missed
+    auto curr_time = world->SimTime();
+    if (calc_dt(last_track_update, curr_time) < (1.0 / track_update_rate)) {
         return;
     }
     last_track_update = curr_time;
 
-    auto ground_truth_track = get_ground_truth_track(ecm, track_model, curr_time, map_frame);
-    
+    auto ground_truth_track = get_ground_truth_track(track_model, curr_time, map_frame);
     if (has_subscribers(track_pub)) {
-        auto centered_ground_truth = get_track_centered_on_car_initial_pose(car_initial_pose, ground_truth_track);
+        auto centered_ground_truth = get_track_centered_on_car_inital_pose(car_inital_pose, ground_truth_track);
         track_pub->publish(centered_ground_truth);
     }
     if (has_subscribers(track_marker_pub)) {
-        auto centered_ground_truth = get_track_centered_on_car_initial_pose(car_initial_pose, ground_truth_track);
+        auto centered_ground_truth = get_track_centered_on_car_inital_pose(car_inital_pose, ground_truth_track);
         publishMarkerArray(centered_ground_truth, true);
     }
 
-    // Publish detection
-    auto dt_detection_duration = curr_time - last_detection_update;
-    double dt_detection = std::chrono::duration<double>(dt_detection_duration).count();
-    
-    if (dt_detection < (1.0 / detection_update_rate)) {
+    // publish detection
+    if (calc_dt(last_detection_update, curr_time) < (1.0 / detection_update_rate)) {
         return;
     }
     last_detection_update = curr_time;
 
-    // Get current car pose
-    gz::math::Pose3d car_pose;
-    auto poseComp = ecm.Component<gz::sim::components::Pose>(car_link);
-    if (poseComp) {
-        car_pose = poseComp->Data();
-    }
-
     if (has_subscribers(detection_pub)) {
-        auto lidar_detection = get_sensor_detection(detection_config, car_pose, ground_truth_track);
+        auto lidar_detection = get_sensor_detection(detection_config, car_link->WorldPose(), ground_truth_track);
         detection_pub->publish(lidar_detection);
     }
     if (has_subscribers(detection_marker_pub)) {
-        auto lidar_detection = get_sensor_detection(detection_config, car_pose, ground_truth_track);
+        auto lidar_detection = get_sensor_detection(detection_config, car_link->WorldPose(), ground_truth_track);
         publishMarkerArray(lidar_detection, false);
     }
 }
 
 // Resets the position of cones to initial track model
-bool ConeDetectionPlugin::resetConePosition(
-    std::shared_ptr<std_srvs::srv::Trigger::Request>,
-    std::shared_ptr<std_srvs::srv::Trigger::Response> response) 
-{
-    if (!ecm_ptr) {
-        response->success = false;
-        response->message = "ECM not available";
-        return false;
-    }
-
-    auto &ecm = *ecm_ptr;
-    
-    // Get all links of the track model
-    gz::sim::Model track(track_model);
-    auto links = track.Links(ecm);
+bool ConeDetectionPlugin::resetConePosition(std::shared_ptr<std_srvs::srv::Trigger::Request>,
+                                            std::shared_ptr<std_srvs::srv::Trigger::Response> response) {
+    gazebo::physics::Link_V links = track_model->GetLinks();
 
     // Loop through all cones
-    for (size_t i = 0; i < links.size() && i < initial_track.cones.size(); i++) {
+    for (unsigned int i = 0; i < links.size(); i++) {
         driverless_msgs::msg::Cone cone = initial_track.cones[i];
 
-        // Initial position and velocity
-        const gz::math::Pose3d pos(cone.location.x, cone.location.y, cone.location.z, 0.0, 0.0, 0.0);
-        const gz::math::Vector3d vel(0.0, 0.0, 0.0);
-        const gz::math::Vector3d angular(0.0, 0.0, 0.0);
+        // Initial position and velocity variables
+        const ignition::math::Pose3d pos(cone.location.x, cone.location.y, cone.location.z, 0.0, 0.0,
+                                         0.0);
+        const ignition::math::Vector3d vel(0.0, 0.0, 0.0);
+        const ignition::math::Vector3d angular(0.0, 0.0, 0.0);
 
-        RCLCPP_DEBUG(node->get_logger(), "Resetting cone %zu to position (%f, %f, %f)", 
-                    i, pos.Pos().X(), pos.Pos().Y(), pos.Pos().Z());
+        RCLCPP_DEBUG(node->get_logger(), "Resetting cone %d to position (%f, %f, %f)", i, pos.Pos().X(),
+                     pos.Pos().Y(), pos.Pos().Z());
 
-        // Set cone position using ECM
-        auto poseComp = ecm.Component<gz::sim::components::Pose>(links[i]);
-        if (poseComp) {
-            *poseComp = gz::sim::components::Pose(pos);
-        } else {
-            ecm.CreateComponent(links[i], gz::sim::components::Pose(pos));
-        }
-
-        // Set linear velocity
-        auto linVelComp = ecm.Component<gz::sim::components::LinearVelocity>(links[i]);
-        if (linVelComp) {
-            *linVelComp = gz::sim::components::LinearVelocity(vel);
-        } else {
-            ecm.CreateComponent(links[i], gz::sim::components::LinearVelocity(vel));
-        }
-
-        // Set angular velocity
-        auto angVelComp = ecm.Component<gz::sim::components::AngularVelocity>(links[i]);
-        if (angVelComp) {
-            *angVelComp = gz::sim::components::AngularVelocity(angular);
-        } else {
-            ecm.CreateComponent(links[i], gz::sim::components::AngularVelocity(angular));
-        }
+        // Set cone position to initial position (and velocity)
+        links[i]->SetWorldPose(pos);
+        links[i]->SetAngularVel(vel);
+        links[i]->SetLinearVel(angular);
     }
 
-    response->success = true;
-    response->message = "Cones reset successfully";
-    return true;
+    return response->success;
 }
 
 // VISUALS
@@ -389,13 +274,7 @@ void ConeDetectionPlugin::publishMarkerArray(driverless_msgs::msg::ConeDetection
     marker_array.markers.clear();
 }
 
+GZ_REGISTER_MODEL_PLUGIN(ConeDetectionPlugin)
+
 }  // namespace vehicle_plugins
 }  // namespace gazebo_plugins
-
-// Register the plugin
-#include <gz/plugin/Register.hh>
-GZ_ADD_PLUGIN(
-    gazebo_plugins::vehicle_plugins::ConeDetectionPlugin,
-    gz::sim::System,
-    gazebo_plugins::vehicle_plugins::ConeDetectionPlugin::ISystemConfigure,
-    gazebo_plugins::vehicle_plugins::ConeDetectionPlugin::ISystemPreUpdate)

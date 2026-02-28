@@ -2,8 +2,15 @@
 
 #include <driverless_msgs/msg/cone.hpp>
 #include <driverless_msgs/msg/cone_detection_stamped.hpp>
-#include <gazebo/gazebo.hh>
+#include <gz/sim/EntityComponentManager.hh>
+#include <gz/sim/Model.hh>
+#include <gz/sim/Link.hh>
+#include <gz/sim/components/Name.hh>
+#include <gz/sim/components/Pose.hh>
+#include <gz/sim/components/Link.hh>
+#include <gz/math/Pose3.hh>
 #include <string>
+#include <chrono>
 
 namespace gazebo_plugins {
 namespace vehicle_plugins {
@@ -18,8 +25,6 @@ typedef struct SensorConfig {
     double offset_z;
 } SensorConfig_t;
 
-double calc_dt(gazebo::common::Time start, gazebo::common::Time end) { return (end - start).Double(); }
-
 bool is_initalised(rclcpp::PublisherBase::SharedPtr publisher) { return (bool)publisher; }
 
 bool has_subscribers(rclcpp::PublisherBase::SharedPtr publisher) {
@@ -33,7 +38,7 @@ double cone_dist(driverless_msgs::msg::Cone cone) {
 double cone_angle(driverless_msgs::msg::Cone cone) { return atan2(cone.location.y, cone.location.x); }
 
 // Translate a cone to the car's frame from the world frame
-driverless_msgs::msg::Cone convert_cone_to_car_frame(const ignition::math::Pose3d car_pose,
+driverless_msgs::msg::Cone convert_cone_to_car_frame(const gz::math::Pose3d car_pose,
                                                      const driverless_msgs::msg::Cone cone, const double offset_x = 0,
                                                      const double offset_z = 0) {
     driverless_msgs::msg::Cone translated_cone = cone;
@@ -51,7 +56,7 @@ driverless_msgs::msg::Cone convert_cone_to_car_frame(const ignition::math::Pose3
 }
 
 // Calculate the distance of a cone from the car
-driverless_msgs::msg::ConeDetectionStamped get_sensor_detection(SensorConfig_t sensor_config, ignition::math::Pose3d car_pose, 
+driverless_msgs::msg::ConeDetectionStamped get_sensor_detection(SensorConfig_t sensor_config, gz::math::Pose3d car_pose, 
                                                                 driverless_msgs::msg::ConeDetectionStamped ground_truth_track) {
 
     driverless_msgs::msg::ConeDetectionStamped detection;
@@ -84,55 +89,75 @@ driverless_msgs::msg::ConeDetectionStamped get_sensor_detection(SensorConfig_t s
 
 // Get the track centered on the car's initial pose
 // Used to update visuals when cones are hit
-driverless_msgs::msg::ConeDetectionStamped get_track_centered_on_car_inital_pose(ignition::math::Pose3d car_inital_pose, 
+driverless_msgs::msg::ConeDetectionStamped get_track_centered_on_car_initial_pose(gz::math::Pose3d car_initial_pose, 
                                                                                  driverless_msgs::msg::ConeDetectionStamped track) {
     driverless_msgs::msg::ConeDetectionStamped centered_track;
     centered_track.header = track.header;
 
     for (auto const &cone : track.cones) {
         auto translated_cone = cone;
-        translated_cone = convert_cone_to_car_frame(car_inital_pose, cone);
+        translated_cone = convert_cone_to_car_frame(car_initial_pose, cone);
         centered_track.cones.push_back(translated_cone);
     }
 
     return centered_track;
 }
 
-// Get the position of a cone in the world frame
-driverless_msgs::msg::Cone get_cone_from_link(gazebo::physics::LinkPtr cone_link) {
+// Get the position of a cone from a link entity using ECM
+driverless_msgs::msg::Cone get_cone_from_link(gz::sim::EntityComponentManager &ecm, gz::sim::Entity link_entity) {
     driverless_msgs::msg::Cone cone;
-    cone.location.x = cone_link->WorldPose().Pos().X();
-    cone.location.y = cone_link->WorldPose().Pos().Y();
-    cone.location.z = 0.15;
+    
+    // Get pose from ECM
+    auto poseComp = ecm.Component<gz::sim::components::Pose>(link_entity);
+    if (poseComp) {
+        cone.location.x = poseComp->Data().Pos().X();
+        cone.location.y = poseComp->Data().Pos().Y();
+        cone.location.z = 0.15;
+    }
+    
     cone.color = driverless_msgs::msg::Cone::UNKNOWN;
 
-    std::string link_name = cone_link->GetName();
+    // Get name from ECM
+    auto nameComp = ecm.Component<gz::sim::components::Name>(link_entity);
+    if (nameComp) {
+        std::string link_name = nameComp->Data();
 
-    if (link_name.substr(0, 9) == "blue_cone") {
-        cone.color = driverless_msgs::msg::Cone::BLUE;
-    } else if (link_name.substr(0, 11) == "yellow_cone") {
-        cone.color = driverless_msgs::msg::Cone::YELLOW;
-    } else if (link_name.substr(0, 11) == "orange_cone") {
-        cone.color = driverless_msgs::msg::Cone::ORANGE_SMALL;
-    } else if (link_name.substr(0, 8) == "big_cone") {
-        cone.color = driverless_msgs::msg::Cone::ORANGE_BIG;
-        cone.location.z = 0.225;
+        if (link_name.substr(0, 9) == "blue_cone") {
+            cone.color = driverless_msgs::msg::Cone::BLUE;
+        } else if (link_name.substr(0, 11) == "yellow_cone") {
+            cone.color = driverless_msgs::msg::Cone::YELLOW;
+        } else if (link_name.substr(0, 11) == "orange_cone") {
+            cone.color = driverless_msgs::msg::Cone::ORANGE_SMALL;
+        } else if (link_name.substr(0, 8) == "big_cone") {
+            cone.color = driverless_msgs::msg::Cone::ORANGE_BIG;
+            cone.location.z = 0.225;
+        }
     }
 
     return cone;
 }
 
-driverless_msgs::msg::ConeDetectionStamped get_ground_truth_track(gazebo::physics::ModelPtr track_model,
-                                                                  gazebo::common::Time now, std::string track_frame_id) {
+// Get ground truth track from track model using ECM
+driverless_msgs::msg::ConeDetectionStamped get_ground_truth_track(gz::sim::EntityComponentManager &ecm,
+                                                                  gz::sim::Entity track_model_entity,
+                                                                  std::chrono::steady_clock::duration sim_time,
+                                                                  std::string track_frame_id) {
     driverless_msgs::msg::ConeDetectionStamped track;
 
     track.header.frame_id = track_frame_id;
-    track.header.stamp.sec = now.sec;
-    track.header.stamp.nanosec = now.nsec;
+    
+    // Convert chrono duration to ROS time
+    auto time_sec = std::chrono::duration_cast<std::chrono::seconds>(sim_time);
+    auto time_nsec = std::chrono::duration_cast<std::chrono::nanoseconds>(sim_time - time_sec);
+    track.header.stamp.sec = time_sec.count();
+    track.header.stamp.nanosec = time_nsec.count();
 
-    gazebo::physics::Link_V links = track_model->GetLinks();
-    for (auto const &link : links) {
-        track.cones.push_back(get_cone_from_link(link));
+    // Get all links of the track model
+    gz::sim::Model track_model(track_model_entity);
+    auto links = track_model.Links(ecm);
+    
+    for (auto const &link_entity : links) {
+        track.cones.push_back(get_cone_from_link(ecm, link_entity));
     }
 
     return track;
