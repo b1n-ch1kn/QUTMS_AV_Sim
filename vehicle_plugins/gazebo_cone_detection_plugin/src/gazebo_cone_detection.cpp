@@ -148,51 +148,50 @@ void ConeDetectionPlugin::PreUpdate(const gz::sim::UpdateInfo &info,
 void ConeDetectionPlugin::update(const gz::sim::UpdateInfo &info, 
                                  gz::sim::EntityComponentManager &ecm) 
 {
-    // Publish track
-    // Faster rate than lidar so updates aren't missed
     auto curr_time = info.simTime;
+    
+    // Get ground truth track (shared by both track and detection publishing)
+    auto ground_truth_track = get_ground_truth_track(ecm, track_model, curr_time, map_frame);
+    
+    // Publish track at configured rate
     auto dt_track_duration = curr_time - last_track_update;
     double dt_track = std::chrono::duration<double>(dt_track_duration).count();
     
-    if (dt_track < (1.0 / track_update_rate)) {
-        return;
-    }
-    last_track_update = curr_time;
-
-    auto ground_truth_track = get_ground_truth_track(ecm, track_model, curr_time, map_frame);
-    
-    if (has_subscribers(track_pub)) {
-        auto centered_ground_truth = get_track_centered_on_car_initial_pose(car_initial_pose, ground_truth_track);
-        track_pub->publish(centered_ground_truth);
-    }
-    if (has_subscribers(track_marker_pub)) {
-        auto centered_ground_truth = get_track_centered_on_car_initial_pose(car_initial_pose, ground_truth_track);
-        publishMarkerArray(centered_ground_truth, true);
+    if (dt_track >= (1.0 / track_update_rate)) {
+        last_track_update = curr_time;
+        
+        if (has_subscribers(track_pub)) {
+            auto centered_ground_truth = get_track_centered_on_car_initial_pose(car_initial_pose, ground_truth_track);
+            track_pub->publish(centered_ground_truth);
+        }
+        if (has_subscribers(track_marker_pub)) {
+            auto centered_ground_truth = get_track_centered_on_car_initial_pose(car_initial_pose, ground_truth_track);
+            publishMarkerArray(centered_ground_truth, true);
+        }
     }
 
-    // Publish detection
+    // Publish detection at configured rate (independent of track rate)
     auto dt_detection_duration = curr_time - last_detection_update;
     double dt_detection = std::chrono::duration<double>(dt_detection_duration).count();
     
-    if (dt_detection < (1.0 / detection_update_rate)) {
-        return;
-    }
-    last_detection_update = curr_time;
+    if (dt_detection >= (1.0 / detection_update_rate)) {
+        last_detection_update = curr_time;
+        
+        // Get current car pose
+        gz::math::Pose3d car_pose;
+        auto poseComp = ecm.Component<gz::sim::components::Pose>(car_link);
+        if (poseComp) {
+            car_pose = poseComp->Data();
+        }
 
-    // Get current car pose
-    gz::math::Pose3d car_pose;
-    auto poseComp = ecm.Component<gz::sim::components::Pose>(car_link);
-    if (poseComp) {
-        car_pose = poseComp->Data();
-    }
-
-    if (has_subscribers(detection_pub)) {
-        auto lidar_detection = get_sensor_detection(detection_config, car_pose, ground_truth_track);
-        detection_pub->publish(lidar_detection);
-    }
-    if (has_subscribers(detection_marker_pub)) {
-        auto lidar_detection = get_sensor_detection(detection_config, car_pose, ground_truth_track);
-        publishMarkerArray(lidar_detection, false);
+        if (has_subscribers(detection_pub)) {
+            auto lidar_detection = get_sensor_detection(detection_config, car_pose, ground_truth_track);
+            detection_pub->publish(lidar_detection);
+        }
+        if (has_subscribers(detection_marker_pub)) {
+            auto lidar_detection = get_sensor_detection(detection_config, car_pose, ground_truth_track);
+            publishMarkerArray(lidar_detection, false);
+        }
     }
 }
 

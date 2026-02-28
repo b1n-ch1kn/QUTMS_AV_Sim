@@ -5,9 +5,11 @@
 #include <gz/sim/EntityComponentManager.hh>
 #include <gz/sim/Model.hh>
 #include <gz/sim/Link.hh>
+#include <gz/sim/Util.hh>
 #include <gz/sim/components/Name.hh>
 #include <gz/sim/components/Pose.hh>
 #include <gz/sim/components/Link.hh>
+#include <gz/sim/components/Model.hh>
 #include <gz/math/Pose3.hh>
 #include <string>
 #include <chrono>
@@ -107,13 +109,11 @@ driverless_msgs::msg::ConeDetectionStamped get_track_centered_on_car_initial_pos
 driverless_msgs::msg::Cone get_cone_from_link(gz::sim::EntityComponentManager &ecm, gz::sim::Entity link_entity) {
     driverless_msgs::msg::Cone cone;
     
-    // Get pose from ECM
-    auto poseComp = ecm.Component<gz::sim::components::Pose>(link_entity);
-    if (poseComp) {
-        cone.location.x = poseComp->Data().Pos().X();
-        cone.location.y = poseComp->Data().Pos().Y();
-        cone.location.z = 0.15;
-    }
+    // Get world pose using utility function (global coordinates)
+    auto pose = gz::sim::worldPose(link_entity, ecm);
+    cone.location.x = pose.Pos().X();
+    cone.location.y = pose.Pos().Y();
+    cone.location.z = 0.15;
     
     cone.color = driverless_msgs::msg::Cone::UNKNOWN;
 
@@ -152,13 +152,24 @@ driverless_msgs::msg::ConeDetectionStamped get_ground_truth_track(gz::sim::Entit
     track.header.stamp.sec = time_sec.count();
     track.header.stamp.nanosec = time_nsec.count();
 
-    // Get all links of the track model
-    gz::sim::Model track_model(track_model_entity);
-    auto links = track_model.Links(ecm);
-    
-    for (auto const &link_entity : links) {
-        track.cones.push_back(get_cone_from_link(ecm, link_entity));
-    }
+    // Track model uses <include> statements, so cones are child models not links
+    // Iterate through all models to find cone models (blue_cone_*, yellow_cone_*, etc.)
+    ecm.Each<gz::sim::components::Model, gz::sim::components::Name>(
+        [&](const gz::sim::Entity &entity,
+            const gz::sim::components::Model *,
+            const gz::sim::components::Name *name) -> bool {
+            // Check if this is a cone model by name
+            std::string model_name = name->Data();
+            if (model_name.find("cone") != std::string::npos && model_name != "track") {
+                // Get the first link of this cone model (the cone geometry)
+                gz::sim::Model cone_model(entity);
+                auto links = cone_model.Links(ecm);
+                if (!links.empty()) {
+                    track.cones.push_back(get_cone_from_link(ecm, links[0]));
+                }
+            }
+            return true; // Continue iterating
+        });
 
     return track;
 }
