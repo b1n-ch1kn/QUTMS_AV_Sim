@@ -49,6 +49,7 @@ endif()
 add_subdirectory(gazebo_vehicle_plugin)
 add_subdirectory(gazebo_cone_detection_plugin)
 add_subdirectory(gazebo_ins_odometry_plugin)
+add_subdirectory(gazebo_tf_broadcaster_plugin)
 
 # Export GZ dependencies manually (not in package.xml)
 ament_export_dependencies(gz-physics7)

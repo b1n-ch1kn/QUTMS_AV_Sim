@@ -25,7 +25,6 @@
 // ROS TF2
 #include <tf2/transform_datatypes.h>
 #include <tf2/utils.h>
-#include <tf2_ros/transform_broadcaster.h>
 #include "tf2_geometry_msgs/tf2_geometry_msgs.hpp"
 
 // ROS srvs
@@ -77,7 +76,6 @@ class VehiclePlugin : public gz::sim::System,
     bool resetVehiclePosition(std::shared_ptr<std_srvs::srv::Trigger::Request> request,
                               std::shared_ptr<std_srvs::srv::Trigger::Response> response);
     void setModelState(gz::sim::EntityComponentManager &ecm);
-    void publishTf();
     void update(const gz::sim::UpdateInfo &info, gz::sim::EntityComponentManager &ecm);
     void onAckermannCmd(const ackermann_msgs::msg::AckermannDriveStamped::SharedPtr msg);
     void onTwistCmd(const geometry_msgs::msg::Twist::SharedPtr msg);
@@ -103,12 +101,8 @@ class VehiclePlugin : public gz::sim::System,
     double update_rate;
     double publish_rate;
 
-    // ROS TF
-    bool pub_tf;
-    std::string map_frame;
     std::string odom_frame;
     std::string base_frame;
-    std::unique_ptr<tf2_ros::TransformBroadcaster> tf_br;
 
     // ROS Publishers
     rclcpp::Publisher<sensor_msgs::msg::JointState>::SharedPtr joint_state_pub;

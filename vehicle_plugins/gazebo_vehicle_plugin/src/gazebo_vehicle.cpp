@@ -42,8 +42,6 @@ void VehiclePlugin::Configure(
     this->node = std::make_shared<rclcpp::Node>("vehicle_plugin_node");
     RCLCPP_INFO(this->node->get_logger(), "Created ROS node inside VehiclePlugin.");
 
-    tf_br = std::make_unique<tf2_ros::TransformBroadcaster>(node);
-
     // Initialize parameters from SDF
     initParams(sdf);
 
@@ -92,7 +90,6 @@ void VehiclePlugin::initParams(const std::shared_ptr<const sdf::Element> &sdf) {
     // Get other parameters from SDF with defaults
     update_rate = sdf->Get<double>("update_rate", 50.0).first;
     publish_rate = sdf->Get<double>("publish_rate", 50.0).first;
-    map_frame = sdf->Get<std::string>("map_frame", "track").first;
     odom_frame = sdf->Get<std::string>("odom_frame", "track").first;
     base_frame = sdf->Get<std::string>("base_frame", "base_footprint").first;
     control_delay = sdf->Get<double>("control_delay", 0.035).first;
@@ -234,27 +231,6 @@ void VehiclePlugin::setModelState(gz::sim::EntityComponentManager &ecm) {
     }
 }
 
-void VehiclePlugin::publishTf() {
-    // Base->Odom/Map
-    tf2::Transform base_to_odom;
-    base_to_odom.setOrigin(tf2::Vector3(state_odom.pose.pose.position.x, 
-                                       state_odom.pose.pose.position.y, 0.0));
-
-    // Orientation
-    tf2::Quaternion base_odom_q;
-    tf2::convert(state_odom.pose.pose.orientation, base_odom_q);
-    base_to_odom.setRotation(base_odom_q);
-
-    // Send TF
-    geometry_msgs::msg::TransformStamped transform_stamped;
-    transform_stamped.header.stamp = state_odom.header.stamp;
-    transform_stamped.header.frame_id = map_frame;
-    transform_stamped.child_frame_id = base_frame;
-    tf2::convert(base_to_odom, transform_stamped.transform);
-
-    tf_br->sendTransform(transform_stamped);
-}
-
 nav_msgs::msg::Odometry VehiclePlugin::stateToOdom(const State &state, const rclcpp::Time &stamp) {
     nav_msgs::msg::Odometry msg;
     msg.header.stamp = stamp;
@@ -378,8 +354,6 @@ void VehiclePlugin::update(const gz::sim::UpdateInfo &info,
     rclcpp::Time publish_time(std::chrono::duration_cast<std::chrono::nanoseconds>(info.simTime).count());
     state_odom = stateToOdom(state, publish_time);
 
-    // Publish TF (odometry now published by INS plugin)
-    publishTf();
 }
 
 void VehiclePlugin::onAckermannCmd(const ackermann_msgs::msg::AckermannDriveStamped::SharedPtr msg) {

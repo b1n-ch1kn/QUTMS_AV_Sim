@@ -130,6 +130,20 @@
   </gazebo>
 
   <gazebo>
+    <!-- TF Broadcaster plugin (publishes vehicle transforms) -->
+    <plugin filename="libgazebo_tf_broadcaster.so" name="gazebo_plugins::vehicle_plugins::TFBroadcasterPlugin">
+      <ros>
+        <namespace>/$(arg namespace)</namespace>
+      </ros>
+      <publish_rate>50.0</publish_rate>
+      <map_frame>track</map_frame>
+      <odom_frame>odom</odom_frame>
+      <base_frame>base_footprint</base_frame>
+      <publish_odom_tf>false</publish_odom_tf>
+    </plugin>
+  </gazebo>
+
+  <gazebo>
     <!-- Cone detection plugin -->
     <plugin filename="libgazebo_cone_detection.so" name="gazebo_plugins::vehicle_plugins::ConeDetectionPlugin">
       <ros>
