@@ -22,6 +22,13 @@
       filename="gz-sim-scene-broadcaster-system"
       name="gz::sim::systems::SceneBroadcaster">
     </plugin>
+        
+    <plugin 
+      filename="gz-sim-sensors-system" 
+      name="gz::sim::systems::Sensors">
+      <render_engine>ogre2</render_engine>
+    </plugin>
+
     <gui fullscreen='0'>
       <camera name='user_camera'>
         <pose frame=''>-40 40 20 0 0.667643 -1</pose>

@@ -43,7 +43,7 @@ def gen_world(context, *args, **kwargs):
         IncludeLaunchDescription(
             launch_description_source=PythonLaunchDescriptionSource(gz_sim_launch),
             launch_arguments=[
-                ("gz_args", f"-r {world_path}"),
+                ("gz_args", f"-r {world_path} -s"),
                 ("on_exit_shutdown", "true"),
             ],
         ),
