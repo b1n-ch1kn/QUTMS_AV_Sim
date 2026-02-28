@@ -22,7 +22,6 @@ void VehiclePlugin::Configure(
     gz::sim::EventManager &eventMgr)
 {
     // Currently unused
-    (void)sdf;
     (void)eventMgr;
 
     // Storage for later
@@ -45,8 +44,8 @@ void VehiclePlugin::Configure(
 
     tf_br = std::make_unique<tf2_ros::TransformBroadcaster>(node);
 
-    // Initialize parameters
-    initParams();
+    // Initialize parameters from SDF
+    initParams(sdf);
 
     // ROS Publishers
     // Odometry
@@ -82,25 +81,30 @@ void VehiclePlugin::Configure(
     RCLCPP_INFO(node->get_logger(), "GZ Sim VehiclePlugin Configured");
 }
 
-void VehiclePlugin::initParams() {
-    // Get ROS parameters
-    update_rate = node->declare_parameter("update_rate", 2.0);
-    publish_rate = node->declare_parameter("publish_rate", 50.0);
-    map_frame = node->declare_parameter("map_frame", "map");
-    odom_frame = node->declare_parameter("odom_frame", "odom");
-    base_frame = node->declare_parameter("base_frame", "base_link");
-    control_delay = node->declare_parameter("control_delay", 0.5);
-    steering_lock_time = node->declare_parameter("steering_lock_time", 1.0);
-
-    // Vehicle model
-    std::string vehicle_yaml_name = node->declare_parameter("vehicle_params", "null");
-    if (vehicle_yaml_name == "null") {
+void VehiclePlugin::initParams(const std::shared_ptr<const sdf::Element> &sdf) {
+    // Read parameters from SDF (plugin configuration in URDF)
+    if (sdf->HasElement("vehicle_params")) {
+        std::string vehicle_yaml_name = sdf->Get<std::string>("vehicle_params");
+        RCLCPP_INFO(node->get_logger(), "Loading vehicle params from: %s", vehicle_yaml_name.c_str());
+        vehicle_model = std::make_unique<VehicleModelBike>(vehicle_yaml_name);
+        motion_noise = std::make_unique<Noise>(vehicle_yaml_name);
+    } else {
         RCLCPP_FATAL(node->get_logger(), 
-                    "gazebo_vehicle plugin missing <vehicle_params> parameter, cannot proceed");
+                    "gazebo_vehicle plugin missing <vehicle_params> parameter in URDF, cannot proceed");
         exit(1);
     }
-    vehicle_model = std::make_unique<VehicleModelBike>(vehicle_yaml_name);
-    motion_noise = std::make_unique<Noise>(vehicle_yaml_name);
+    
+    // Get other parameters from SDF with defaults
+    update_rate = sdf->Get<double>("update_rate", 50.0).first;
+    publish_rate = sdf->Get<double>("publish_rate", 50.0).first;
+    map_frame = sdf->Get<std::string>("map_frame", "track").first;
+    odom_frame = sdf->Get<std::string>("odom_frame", "track").first;
+    base_frame = sdf->Get<std::string>("base_frame", "base_footprint").first;
+    control_delay = sdf->Get<double>("control_delay", 0.035).first;
+    steering_lock_time = sdf->Get<double>("steering_lock_time", 1.5).first;
+    
+    RCLCPP_INFO(node->get_logger(), "Vehicle plugin params loaded: update_rate=%.1f, publish_rate=%.1f", 
+                update_rate, publish_rate);
 }
 
 void VehiclePlugin::PreUpdate(const gz::sim::UpdateInfo &info,

@@ -45,8 +45,8 @@ void ConeDetectionPlugin::Configure(
     // Store ECM pointer for reset service
     ecm_ptr = &ecm;
 
-    // Initialize parameters
-    initParams();
+    // Initialize parameters from SDF
+    initParams(sdf);
 
     // Publishers
     track_pub = node->create_publisher<driverless_msgs::msg::ConeDetectionStamped>(("track/ground_truth"), 1);
@@ -69,24 +69,26 @@ void ConeDetectionPlugin::Configure(
     RCLCPP_INFO(node->get_logger(), "GZ Sim ConeDetectionPlugin Configured");
 }
 
-void ConeDetectionPlugin::initParams() {
-    map_frame = node->declare_parameter("map_frame", "map");
-    base_frame = node->declare_parameter("base_frame", "base_link");
-
-    // Note: track_model and car_link will be initialized in PreUpdate when ECM is fully populated
-
-    detection_update_rate = node->declare_parameter("lidar_update_rate", 1.0);
-    track_update_rate = node->declare_parameter("track_update_rate", 1.0);
+void ConeDetectionPlugin::initParams(const std::shared_ptr<const sdf::Element> &sdf) {
+    // Read parameters from SDF (plugin configuration in URDF)
+    map_frame = sdf->Get<std::string>("map_frame", "track").first;
+    base_frame = sdf->Get<std::string>("base_frame", "base_footprint").first;
+    
+    detection_update_rate = sdf->Get<double>("lidar_update_rate", 10.0).first;
+    track_update_rate = sdf->Get<double>("track_update_rate", 20.0).first;
 
     detection_config = {
-        node->declare_parameter("lidar_frame_id", "sensor"),
-        node->declare_parameter("lidar_min_view_distance", 0.0),
-        node->declare_parameter("lidar_max_view_distance", 0.0),
-        node->declare_parameter("lidar_fov", 0.0),
-        node->declare_parameter("lidar_detects_colour", false),
-        node->declare_parameter("lidar_offset_x", 0.0),
-        node->declare_parameter("lidar_offset_z", 0.0)
+        sdf->Get<std::string>("lidar_frame_id", "velodyne").first,
+        sdf->Get<double>("lidar_min_view_distance", 1.0).first,
+        sdf->Get<double>("lidar_max_view_distance", 20.0).first,
+        sdf->Get<double>("lidar_fov", 3.141593).first,
+        sdf->Get<bool>("lidar_detects_colour", false).first,
+        sdf->Get<double>("lidar_offset_x", 1.59).first,
+        sdf->Get<double>("lidar_offset_z", 0.25).first
     };
+    
+    RCLCPP_INFO(node->get_logger(), "Cone detection plugin params loaded: lidar_fov=%.2f, max_dist=%.1f", 
+                detection_config.fov, detection_config.max_view_distance);
 }
 
 void ConeDetectionPlugin::PreUpdate(const gz::sim::UpdateInfo &info,

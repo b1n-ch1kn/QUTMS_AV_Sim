@@ -55,7 +55,7 @@ class ConeDetectionPlugin : public gz::sim::System,
 
    private:
     void update(const gz::sim::UpdateInfo &info, gz::sim::EntityComponentManager &ecm);
-    void initParams();
+    void initParams(const std::shared_ptr<const sdf::Element> &sdf);
     bool resetConePosition(std::shared_ptr<std_srvs::srv::Trigger::Request> request,
                            std::shared_ptr<std_srvs::srv::Trigger::Response> response);
 

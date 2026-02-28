@@ -73,16 +73,5 @@
         </plugin>
       </sensor>
     </gazebo>
-    
-    <!-- ROS-GZ bridge for LiDAR (model-level plugin) -->
-    <gazebo>
-      <plugin filename="libros_gz_bridge" name="ros_gz_bridge::RosGzBridge">
-        <ros>
-          <namespace>/${namespace}</namespace>
-          <remapping>/${prefix}/scan:=scan</remapping>
-        </ros>
-        <topic name="/${prefix}/scan" type="sensor_msgs/msg/LaserScan"/>
-      </plugin>
-    </gazebo>
   </xacro:macro>
 </robot>

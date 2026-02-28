@@ -38,7 +38,6 @@ def gen_world(context, *args, **kwargs):
     world_path = join(sim_pkg, "worlds", track)
 
     gz_sim_launch = join(get_package_share_directory("ros_gz_sim"), "launch", "gz_sim.launch.py")
-    params_file = join(sim_pkg, "config", "user_config.yaml")
 
     return [
         IncludeLaunchDescription(
@@ -68,6 +67,19 @@ def spawn_car(context, *args, **kwargs):
     base_frame = get_argument(context, "base_frame")
     display_car = get_argument(context, "display_car")
     namespace = get_argument(context, "namespace")
+
+    # Prepare bridge configuration with world name replacement
+    bridge_config_in = join(sim_pkg, "config", "bridge.yaml")
+    bridge_config_out = join(sim_pkg, "config", f"bridge_{track}.yaml")
+    
+    with open(bridge_config_in, "r") as f:
+        bridge_yaml = f.read()
+    
+    # Replace world name placeholder with actual track name
+    bridge_yaml = bridge_yaml.replace("WORLD_NAME", track)
+    
+    with open(bridge_config_out, "w") as f:
+        f.write(bridge_yaml)
 
     xacro_path = join(sim_pkg, "urdf", "robot.urdf.xacro")
     urdf_path = join(sim_pkg, "urdf", "robot.urdf")
@@ -150,6 +162,20 @@ def spawn_car(context, *args, **kwargs):
             ],
             arguments=["--ros-args", "--log-level", "warn"],
         ),
+        Node(
+            package="ros_gz_bridge",
+            executable="parameter_bridge",
+            name="gz_bridge",
+            namespace=namespace,
+            output="screen",
+            parameters=[
+                {
+                    "use_sim_time": LaunchConfiguration("use_sim_time"),
+                    "config_file": bridge_config_out,
+                }
+            ],
+            arguments=["--ros-args", "--log-level", "warn"],
+        ),
     ]
 
 
@@ -187,7 +213,6 @@ def generate_launch_description():
     with open(default_plugin_yaml, "r") as f:
         data = yaml.safe_load(f)
 
-    noise_config = join(sim_pkg, "config", "motion_noise.yaml")
     vehicle_config = join(sim_pkg, "config", "vehicle_params.yaml")
 
     track = data["/**"]["ros__parameters"]["track"]
@@ -197,14 +222,6 @@ def generate_launch_description():
     display_car = data["/**"]["ros__parameters"]["display_car"]
     namespace = data["/**"]["ros__parameters"]["namespace"]
     base_frame = data["/**"]["ros__parameters"]["base_frame"]
-
-    # write noise path to plugin yaml
-    data[namespace]["vehicle_plugin"]["ros__parameters"]["noise_config"] = noise_config
-    data[namespace]["vehicle_plugin"]["ros__parameters"]["vehicle_params"] = vehicle_config
-
-    plugin_yaml = join(sim_pkg, "config", "user_config.yaml")
-    with open(plugin_yaml, "w") as f:
-        yaml.safe_dump(data, f)
 
     # load yaml file
     return LaunchDescription(

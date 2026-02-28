@@ -73,7 +73,7 @@ class VehiclePlugin : public gz::sim::System,
                    gz::sim::EntityComponentManager &ecm) override;
 
    private:
-    void initParams();
+    void initParams(const std::shared_ptr<const sdf::Element> &sdf);
     void setPositionFromWorld(gz::sim::EntityComponentManager &ecm);
     bool resetVehiclePosition(std::shared_ptr<std_srvs::srv::Trigger::Request> request,
                               std::shared_ptr<std_srvs::srv::Trigger::Response> response);

@@ -23,6 +23,14 @@
             <ros>
                 <namespace>/$(arg namespace)</namespace>
             </ros>
+            <vehicle_params>$(find qutms_sim)/config/vehicle_params.yaml</vehicle_params>
+            <update_rate>50.0</update_rate>
+            <publish_rate>50.0</publish_rate>
+            <map_frame>track</map_frame>
+            <odom_frame>track</odom_frame>
+            <base_frame>base_footprint</base_frame>
+            <control_delay>0.035</control_delay>
+            <steering_lock_time>1.5</steering_lock_time>
         </plugin>
     </gazebo>
 
@@ -32,6 +40,18 @@
             <ros>
                 <namespace>/$(arg namespace)</namespace>
             </ros>
+            <track_update_rate>20.0</track_update_rate>
+            <lidar_update_rate>10.0</lidar_update_rate>
+            <lidar_frame_id>velodyne</lidar_frame_id>
+            <lidar_min_view_distance>1.0</lidar_min_view_distance>
+            <lidar_max_view_distance>20.0</lidar_max_view_distance>
+            <lidar_fov>3.141593</lidar_fov>
+            <lidar_range_noise>0.01</lidar_range_noise>
+            <lidar_bearing_noise>0.001</lidar_bearing_noise>
+            <lidar_detects_colour>false</lidar_detects_colour>
+            <lidar_offset_x>1.59</lidar_offset_x>
+            <lidar_offset_z>0.25</lidar_offset_z>
+            <base_frame>base_footprint</base_frame>
         </plugin>
     </gazebo>
 

@@ -82,6 +82,53 @@ ros2 launch qutms_sim sim.launch.py
 
 The simulator can be configured using the config file. This file is located at `QUTMS_AV_Sim/qutms_sim/config/config.yaml`. The file contains a number of parameters, whose effects are documented within.
 
+#### Plugin Configuration
+
+GZ Sim plugins (vehicle dynamics, cone detection, etc.) are configured directly in the URDF files using SDF parameters. Plugin parameters are embedded as XML elements within the `<plugin>` tags.
+
+To modify plugin behavior, edit the corresponding URDF/xacro files:
+- **Vehicle Plugin**: `qutms_sim/urdf/robot.urdf.xacro` - Configure vehicle dynamics, update rates, frame IDs, and control delays
+- **Cone Detection Plugin**: `qutms_sim/urdf/robot.urdf.xacro` - Configure LIDAR parameters, detection ranges, and noise settings
+- **Sensor Plugins**: `qutms_sim/urdf/lidar.urdf.xacro` - Configure sensor-specific parameters
+
+Example plugin configuration in URDF:
+```xml
+<plugin filename="libgazebo_vehicle_plugin" name="vehicle_plugin">
+  <vehicle_params>$(find qutms_sim)/config/vehicle.yaml</vehicle_params>
+  <update_rate>1000.0</update_rate>
+  <publish_rate>200.0</publish_rate>
+  <map_frame>track</map_frame>
+  <odom_frame>track</odom_frame>
+  <base_frame>base_footprint</base_frame>
+</plugin>
+```
+
+#### Bridge Configuration
+
+Topic bridging between GZ Sim and ROS 2 is configured in `qutms_sim/config/bridge.yaml`. This allows sensor data and other topics to pass between the simulator and ROS 2.
+
+To add new topics to the bridge:
+1. Open `qutms_sim/config/bridge.yaml`
+2. Add a new topic entry to the `topics` list following this format:
+
+```yaml
+- topic_name: your_ros_topic_name
+  gz_topic_name: /world/WORLD_NAME/model/QEV-3D/link/<link_name>/sensor/<sensor_name>/<topic>
+  ros_type_name: package_name/msg/MessageType
+  gz_type_name: gz.msgs.MessageType
+  direction: GZ_TO_ROS  # or ROS_TO_GZ or BIDIRECTIONAL
+```
+
+**Note:** Use `WORLD_NAME` as a placeholder - it will be automatically replaced with the actual track name at launch time.
+
+Common sensor bridges:
+- **LIDAR**: `sensor_msgs/msg/LaserScan` ↔ `gz.msgs.LaserScan`
+- **Camera**: `sensor_msgs/msg/Image` ↔ `gz.msgs.Image`
+- **IMU**: `sensor_msgs/msg/Imu` ↔ `gz.msgs.IMU`
+- **Odometry**: `nav_msgs/msg/Odometry` ↔ `gz.msgs.Odometry`
+
+See the commented examples in `bridge.yaml` for more details.
+
 ### Visualising the Simulator
 
 The simulator can be visualised using RViz or Foxglove Studio, these can be configured. With Rviz, you can visualise the vehicle and its sensors. With Foxglove Studio, you can visualise the vehicle, its sensors, and datastreams, in addition to controlling the vehicle and providing a more interactive experience.

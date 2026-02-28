@@ -1,0 +1,27 @@
+# ROS-GZ Bridge Configuration
+# This file defines all topic bridges between GZ Sim and ROS 2
+#
+# Note: GZ topic names follow the pattern:
+# /world/<world_name>/model/<model_name>/link/<link_name>/sensor/<sensor_name>/<topic>
+#
+# For dynamic world names, use placeholder that will be replaced in launch file
+
+# LIDAR scan data
+- ros_topic_name: scan
+  gz_topic_name: /world/WORLD_NAME/model/QEV-3D/link/velodyne/sensor/velodyne-laserscan/scan
+  ros_type_name: sensor_msgs/msg/LaserScan
+  gz_type_name: gz.msgs.LaserScan
+  direction: GZ_TO_ROS
+
+# Add more topic bridges here as needed, for example:
+# - ros_topic_name: camera/image_raw
+#   gz_topic_name: /world/WORLD_NAME/model/QEV-3D/link/camera_link/sensor/camera/image
+#   ros_type_name: sensor_msgs/msg/Image
+#   gz_type_name: gz.msgs.Image
+#   direction: GZ_TO_ROS
+#
+# - ros_topic_name: imu
+#   gz_topic_name: /world/WORLD_NAME/model/QEV-3D/link/imu_link/sensor/imu/imu
+#   ros_type_name: sensor_msgs/msg/Imu
+#   gz_type_name: gz.msgs.IMU
+#   direction: GZ_TO_ROS
