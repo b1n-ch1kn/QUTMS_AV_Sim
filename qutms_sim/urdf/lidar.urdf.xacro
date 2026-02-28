@@ -67,13 +67,15 @@
           </noise>
         </ray>
 
-        <plugin name="laserscan_sensor" filename="gz-sim-sensors-system" 
+        <plugin filename="gz-sim-sensors-system" 
                 name="gz::sim::systems::Sensors">
           <render_engine>ogre2</render_engine>
         </plugin>
       </sensor>
-      
-      <!-- Use ros_gz_bridge to publish lidar data -->
+    </gazebo>
+    
+    <!-- ROS-GZ bridge for LiDAR (model-level plugin) -->
+    <gazebo>
       <plugin filename="libros_gz_bridge" name="ros_gz_bridge::RosGzBridge">
         <ros>
           <namespace>/${namespace}</namespace>
