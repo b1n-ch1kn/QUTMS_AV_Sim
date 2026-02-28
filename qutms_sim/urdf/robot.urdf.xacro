@@ -1,135 +1,144 @@
 <?xml version="1.0"?>
 <robot name="QEV-3D" xmlns:xacro="http://www.ros.org/wiki/xacro">
 
-    <!--  Load the config file  -->
-    <xacro:property name="config" value="${load_yaml('$(arg vehicle_config)')}"/>
+  <!--  Load the config file  -->
+  <xacro:property name="config" value="${load_yaml('$(arg vehicle_config)')}"/>
 
-    <!--  Get the parameters  -->
-    <xacro:arg name="base_frame" default="base_link"/>
-    <xacro:arg name="display_car" default="true"/>
-    <!-- <xacro:arg name="namespace" default="sim"/> -->
+  <!--  Get the parameters  -->
+  <xacro:arg name="base_frame" default="base_link"/>
+  <xacro:arg name="display_car" default="true"/>
+  <!-- <xacro:arg name="namespace" default="sim"/> -->
 
-    <!-- Imports -->
-    <xacro:include filename="$(find qutms_sim)/urdf/wheels.urdf.xacro"/>
-    <xacro:include filename="$(find qutms_sim)/urdf/lidar.urdf.xacro"/>
+  <!-- Imports -->
+  <xacro:include filename="$(find qutms_sim)/urdf/wheels.urdf.xacro"/>
+  <xacro:include filename="$(find qutms_sim)/urdf/lidar.urdf.xacro"/>
 
-    <!--  GZ Sim plugins  -->
-    <gazebo>
-        <!-- Vehicle plugin -->
-        <plugin filename="libgazebo_vehicle.so" name="gazebo_plugins::vehicle_plugins::VehiclePlugin">
-            <ros>
-                <namespace>/$(arg namespace)</namespace>
-            </ros>
-            <vehicle_params>$(find qutms_sim)/config/vehicle_params.yaml</vehicle_params>
-            <update_rate>50.0</update_rate>
-            <publish_rate>50.0</publish_rate>
-            <map_frame>track</map_frame>
-            <odom_frame>track</odom_frame>
-            <base_frame>base_footprint</base_frame>
-            <control_delay>0.035</control_delay>
-            <steering_lock_time>1.5</steering_lock_time>
-        </plugin>
-    </gazebo>
+  <!-- Vehicle Elements -->
+  <xacro:property name="wheel_diameter" value="0.4064"/> <!-- ALSO FOUND IN wheels.urdf.xacro -->
 
-    <gazebo>
-        <!-- Cone detection plugin -->
-        <plugin filename="libgazebo_cone_detection.so" name="gazebo_plugins::vehicle_plugins::ConeDetectionPlugin">
-            <ros>
-                <namespace>/$(arg namespace)</namespace>
-            </ros>
-            <track_update_rate>20.0</track_update_rate>
-            <lidar_update_rate>10.0</lidar_update_rate>
-            <lidar_frame_id>velodyne</lidar_frame_id>
-            <lidar_min_view_distance>1.0</lidar_min_view_distance>
-            <lidar_max_view_distance>20.0</lidar_max_view_distance>
-            <lidar_fov>3.141593</lidar_fov>
-            <lidar_range_noise>0.01</lidar_range_noise>
-            <lidar_bearing_noise>0.001</lidar_bearing_noise>
-            <lidar_detects_colour>false</lidar_detects_colour>
-            <lidar_offset_x>1.59</lidar_offset_x>
-            <lidar_offset_z>0.25</lidar_offset_z>
-            <base_frame>base_footprint</base_frame>
-        </plugin>
-    </gazebo>
+  <material name="orange">
+    <color rgba="0.88 0.36 0.035 1"/>
+  </material>
 
-    <!-- Vehicle Elements -->
-    <xacro:property name="wheel_diameter" value="0.4064"/> <!-- ALSO FOUND IN wheels.urdf.xacro -->
+  <!-- Chassis -->
+  <link name="$(arg base_frame)"/>
 
-    <material name="orange">
-      <color rgba="0.88 0.36 0.035 1"/>
-    </material>
+  <xacro:property name="chassis_mesh" value="file://$(find qutms_sim)/meshes/lando.dae"/>
 
-    <!-- Chassis -->
-    <link name="$(arg base_frame)"/>
+  <joint name="chassis_joint" type="fixed">
+    <parent link="$(arg base_frame)"/>
+    <child link="chassis"/>
+    <!-- chassis link at wheel centre height above ground -->
+    <origin xyz="0 0 ${wheel_diameter/2}" 
+            rpy="0 0 0"/>
+    <axis xyz="1 0 0"/>
+  </joint>
 
-    <xacro:property name="chassis_mesh" value="file://$(find qutms_sim)/meshes/lando.dae"/>
-
-    <joint name="chassis_joint" type="fixed">
-      <parent link="$(arg base_frame)"/>
-      <child link="chassis"/>
-      <!-- chassis link at wheel centre height above ground -->
-      <origin xyz="0 0 ${wheel_diameter/2}" 
-              rpy="0 0 0"/>
-      <axis xyz="1 0 0"/>
-    </joint>
-
-    <link name="chassis">
-      <!-- Display car mesh (for RVIZ) -->
-      <xacro:if value="$(arg display_car)">
-        <visual>
-          <origin xyz="0 0 0" rpy="0 0 0" />
-          <geometry>
-            <mesh filename="${chassis_mesh}"/>
-          </geometry>
-        </visual>
-        <collision>
-          <origin xyz="0 0 0" rpy="0 0 0" />
-          <geometry>
-            <mesh filename="${chassis_mesh}"/>
-          </geometry>
-        </collision>
-      </xacro:if>
-
-      <!-- Display block car (for Foxglove) -->
-      <xacro:unless value="$(arg display_car)">
-        <visual>
-          <origin xyz="0.3 0 0.2" rpy="0 0 0"/>
-          <geometry>
-            <box size="2.5 0.7 0.6"/>
-          </geometry>
-          <material name="orange"/>
-        </visual>
-        <collision>
-          <origin xyz="0.3 0 0.2" rpy="0 0 0"/>
-          <geometry>
-            <box size="2.5 0.7 0.6"/>
-          </geometry>
-          <material name="orange"/>
-        </collision>
-      </xacro:unless>
-
-      <inertial>
+  <link name="chassis">
+    <!-- Display car mesh (for RVIZ) -->
+    <xacro:if value="$(arg display_car)">
+      <visual>
         <origin xyz="0 0 0" rpy="0 0 0" />
-        <mass value="200" />
-        <inertia
-            ixx="16.3"
-            ixy="0"
-            ixz="0"
-            iyy="33.6"
-            iyz="0"
-            izz="47.9" />
-      </inertial>
-    </link>
+        <geometry>
+          <mesh filename="${chassis_mesh}"/>
+        </geometry>
+      </visual>
+      <collision>
+        <origin xyz="0 0 0" rpy="0 0 0" />
+        <geometry>
+          <mesh filename="${chassis_mesh}"/>
+        </geometry>
+      </collision>
+    </xacro:if>
 
-    <!-- Wheels -->
-    <xacro:front_wheel lr_prefix="left" lr_reflect="1"/>
-    <xacro:front_wheel lr_prefix="right" lr_reflect="-1"/>
+    <!-- Display block car (for Foxglove) -->
+    <xacro:unless value="$(arg display_car)">
+      <visual>
+        <origin xyz="0.3 0 0.2" rpy="0 0 0"/>
+        <geometry>
+          <box size="2.5 0.7 0.6"/>
+        </geometry>
+        <material name="orange"/>
+      </visual>
+      <collision>
+        <origin xyz="0.3 0 0.2" rpy="0 0 0"/>
+        <geometry>
+          <box size="2.5 0.7 0.6"/>
+        </geometry>
+        <material name="orange"/>
+      </collision>
+    </xacro:unless>
 
-    <xacro:rear_wheel lr_prefix="left" lr_reflect="1" />
-    <xacro:rear_wheel lr_prefix="right" lr_reflect="-1" />
+    <inertial>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <mass value="200" />
+      <inertia
+          ixx="16.3"
+          ixy="0"
+          ixz="0"
+          iyy="33.6"
+          iyz="0"
+          izz="47.9" />
+    </inertial>
+  </link>
 
-    <!-- LiDAR -->    
-    <xacro:LiDAR parent="chassis" prefix="velodyne" namespace="$(arg namespace)">
-        <origin xyz="1.590 0.0 0.0" rpy="0 0 0"/>
-    </xacro:LiDAR>
+  <!-- Wheels -->
+  <xacro:front_wheel lr_prefix="left" lr_reflect="1"/>
+  <xacro:front_wheel lr_prefix="right" lr_reflect="-1"/>
+
+  <xacro:rear_wheel lr_prefix="left" lr_reflect="1" />
+  <xacro:rear_wheel lr_prefix="right" lr_reflect="-1" />
+
+  <!-- LiDAR -->    
+  <xacro:LiDAR parent="chassis" prefix="velodyne" namespace="$(arg namespace)">
+      <origin xyz="1.590 0.0 0.0" rpy="0 0 0"/>
+  </xacro:LiDAR>
+
+
+  <!--  GZ Sim plugins  -->
+  <gazebo>
+    <!-- Vehicle plugin -->
+    <plugin filename="libgazebo_vehicle.so" name="gazebo_plugins::vehicle_plugins::VehiclePlugin">
+      <ros>
+        <namespace>/$(arg namespace)</namespace>
+      </ros>
+      <vehicle_params>$(find qutms_sim)/config/vehicle_params.yaml</vehicle_params>
+      <update_rate>50.0</update_rate>
+      <publish_rate>50.0</publish_rate>
+      <map_frame>track</map_frame>
+      <odom_frame>track</odom_frame>
+      <base_frame>base_footprint</base_frame>
+      <control_delay>0.035</control_delay>
+      <steering_lock_time>1.5</steering_lock_time>
+    </plugin>
+  </gazebo>
+
+  <gazebo>
+    <!-- Cone detection plugin -->
+    <plugin filename="libgazebo_cone_detection.so" name="gazebo_plugins::vehicle_plugins::ConeDetectionPlugin">
+      <ros>
+        <namespace>/$(arg namespace)</namespace>
+      </ros>
+      <track_update_rate>20.0</track_update_rate>
+      <lidar_update_rate>10.0</lidar_update_rate>
+      <lidar_frame_id>velodyne</lidar_frame_id>
+      <lidar_min_view_distance>1.0</lidar_min_view_distance>
+      <lidar_max_view_distance>20.0</lidar_max_view_distance>
+      <lidar_fov>3.141593</lidar_fov>
+      <lidar_range_noise>0.01</lidar_range_noise>
+      <lidar_bearing_noise>0.001</lidar_bearing_noise>
+      <lidar_detects_colour>false</lidar_detects_colour>
+      <lidar_offset_x>1.59</lidar_offset_x>
+      <lidar_offset_z>0.25</lidar_offset_z>
+      <base_frame>base_footprint</base_frame>
+    </plugin>
+  </gazebo>
+
+  <gazebo>
+    <plugin filename="gz-sim-sensors-system" 
+            name="gz::sim::systems::Sensors">
+      <render_engine>ogre2</render_engine>
+    </plugin>
+  </gazebo>
+
 </robot>

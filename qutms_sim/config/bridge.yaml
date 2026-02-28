@@ -8,7 +8,7 @@
 
 # LIDAR scan data
 - ros_topic_name: scan
-  gz_topic_name: /world/WORLD_NAME/model/QEV-3D/link/velodyne/sensor/velodyne-laserscan/scan
+  gz_topic_name: /scan
   ros_type_name: sensor_msgs/msg/LaserScan
   gz_type_name: gz.msgs.LaserScan
   direction: GZ_TO_ROS
