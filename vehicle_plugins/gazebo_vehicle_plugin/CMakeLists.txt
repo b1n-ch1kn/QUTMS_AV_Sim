@@ -10,3 +10,10 @@ target_include_directories(gazebo_vehicle PUBLIC
 )
 
 target_link_libraries(gazebo_vehicle yaml-cpp)
+
+# Install plugin library for GZ Sim
+install(TARGETS gazebo_vehicle
+  ARCHIVE DESTINATION lib
+  LIBRARY DESTINATION lib
+  RUNTIME DESTINATION bin
+)
