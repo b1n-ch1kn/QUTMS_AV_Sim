@@ -1,11 +1,14 @@
 #include "gazebo_vehicle_plugin/gazebo_vehicle.hpp"
 
 #include <gz/sim/components/AngularVelocity.hh>
+#include <gz/sim/components/AngularVelocityCmd.hh>
 #include <gz/sim/components/Joint.hh>
 #include <gz/sim/components/JointPosition.hh>
 #include <gz/sim/components/LinearVelocity.hh>
+#include <gz/sim/components/LinearVelocityCmd.hh>
 #include <gz/sim/components/Name.hh>
 #include <gz/sim/components/Pose.hh>
+#include <gz/sim/components/PoseCmd.hh>
 #include <gz/sim/components/World.hh>
 
 namespace gazebo_plugins {
@@ -166,10 +169,34 @@ void VehiclePlugin::setModelState(gz::sim::EntityComponentManager &ecm) {
     double vy = state.v_x * sin(yaw) + state.v_y * cos(yaw);
 
     const gz::math::Pose3d pose(x, y, z, 0, 0.0, yaw);
-    const gz::math::Vector3d vel(vx, vy, 0.0);
-    const gz::math::Vector3d angular(0.0, 0.0, state.r_z);
+    const gz::math::Vector3d linVel(vx, vy, 0.0);
+    const gz::math::Vector3d angVel(0.0, 0.0, state.r_z);
 
-    // Set pose using ECM
+    // Use WorldPoseCmd to command the model pose (overrides physics)
+    auto poseCmdComp = ecm.Component<gz::sim::components::WorldPoseCmd>(_entity);
+    if (poseCmdComp) {
+        *poseCmdComp = gz::sim::components::WorldPoseCmd(pose);
+    } else {
+        ecm.CreateComponent(_entity, gz::sim::components::WorldPoseCmd(pose));
+    }
+
+    // Use WorldLinearVelocityCmd to command linear velocity
+    auto linVelCmdComp = ecm.Component<gz::sim::components::WorldLinearVelocityCmd>(_entity);
+    if (linVelCmdComp) {
+        *linVelCmdComp = gz::sim::components::WorldLinearVelocityCmd(linVel);
+    } else {
+        ecm.CreateComponent(_entity, gz::sim::components::WorldLinearVelocityCmd(linVel));
+    }
+
+    // Use WorldAngularVelocityCmd to command angular velocity
+    auto angVelCmdComp = ecm.Component<gz::sim::components::WorldAngularVelocityCmd>(_entity);
+    if (angVelCmdComp) {
+        *angVelCmdComp = gz::sim::components::WorldAngularVelocityCmd(angVel);
+    } else {
+        ecm.CreateComponent(_entity, gz::sim::components::WorldAngularVelocityCmd(angVel));
+    }
+
+    // Also update the read-only state components so sensor plugins can read current state
     auto poseComp = ecm.Component<gz::sim::components::Pose>(_entity);
     if (poseComp) {
         *poseComp = gz::sim::components::Pose(pose);
@@ -177,20 +204,18 @@ void VehiclePlugin::setModelState(gz::sim::EntityComponentManager &ecm) {
         ecm.CreateComponent(_entity, gz::sim::components::Pose(pose));
     }
 
-    // Set linear velocity
     auto linVelComp = ecm.Component<gz::sim::components::LinearVelocity>(_entity);
     if (linVelComp) {
-        *linVelComp = gz::sim::components::LinearVelocity(vel);
+        *linVelComp = gz::sim::components::LinearVelocity(linVel);
     } else {
-        ecm.CreateComponent(_entity, gz::sim::components::LinearVelocity(vel));
+        ecm.CreateComponent(_entity, gz::sim::components::LinearVelocity(linVel));
     }
 
-    // Set angular velocity
     auto angVelComp = ecm.Component<gz::sim::components::AngularVelocity>(_entity);
     if (angVelComp) {
-        *angVelComp = gz::sim::components::AngularVelocity(angular);
+        *angVelComp = gz::sim::components::AngularVelocity(angVel);
     } else {
-        ecm.CreateComponent(_entity, gz::sim::components::AngularVelocity(angular));
+        ecm.CreateComponent(_entity, gz::sim::components::AngularVelocity(angVel));
     }
 }
 

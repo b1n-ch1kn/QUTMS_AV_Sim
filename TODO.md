@@ -393,26 +393,32 @@ nav_msgs::msg::Odometry stateToOdom(const State &state, const rclcpp::Time &stam
 ### ✅ Fully Functional Components
 
 **Vehicle Dynamics:**
-- ✅ Bicycle model physics simulation
-- ✅ Ackermann command control (`/sim/control/ackermann_cmd`)
-- ✅ Twist command control (`/sim/control/twist_cmd`)
+- ✅ Bicycle model physics simulation (kinematic)
+- ✅ Pose/velocity commanded via ECM components (WorldPoseCmd, WorldLinearVelocityCmd, WorldAngularVelocityCmd)
+- ✅ State components updated for sensor plugin reads (Pose, LinearVelocity, AngularVelocity)
+- ✅ Ackermann command control (`/sim/control/ackermann_cmd`) - via separate control plugin
+- ✅ Twist command control (`/sim/control/twist_cmd`) - via separate control plugin
 - ✅ Steering rate limiting
 - ✅ Velocity control with acceleration limits
 - ✅ Reset service (`/sim/reset_vehicle_pos`)
+- ✅ Modular plugin architecture (dynamics, control, sensors separated)
 
 **Odometry & State Estimation:**
-- ✅ Ground truth odometry (`/sim/odom/ground_truth`)
-- ✅ Noisy odometry (`/sim/odom`)
-- ✅ Motion noise model applied
-- ✅ Update rate: 2 Hz (vehicle model)
-- ✅ Publish rate: 50 Hz (ROS topics)
+- ✅ Ground truth odometry (`/sim/odom/ground_truth`) - via INS odometry plugin
+- ✅ Noisy odometry (`/sim/odom`) - via INS odometry plugin
+- ✅ Motion noise model applied (Gaussian noise on position/velocity)
+- ✅ Update rate: 50 Hz (vehicle model)
+- ✅ Publish rate: 50 Hz (INS odometry plugin)
 - ✅ Timestamps: Synchronized with simulation time
+- ✅ ECM-based architecture (plugins read state from ECM components)
 
 **TF Broadcasting:**
-- ✅ TF tree: map → base_link
+- ✅ TF tree: map → base_link - via TF broadcaster plugin
 - ✅ Synchronized with simulation clock
-- ✅ Joint states published (steering joints)
+- ✅ First update publishes immediately (no delayed transforms)
+- ✅ Joint states published (steering joints) - still in vehicle plugin
 - ✅ Frame transformations correct
+- ✅ Configurable frame IDs via SDF parameters
 
 **Sensors:**
 - ✅ LIDAR sensor (gpu_lidar)
@@ -650,6 +656,7 @@ This pattern will be followed for all future sensor plugins (camera, GPS, IMU, e
   - [x] Create TF broadcaster
   - [x] Publish configured transforms
   - [x] Support multiple frame configurations
+  - [x] **Bug Fix:** Added `first_update` flag to publish immediately on startup (prevents 45-second TF delay)
 - [x] Make TF configurable
   - [x] Frame IDs from SDF parameters
   - [x] Optional transforms
@@ -666,10 +673,11 @@ This pattern will be followed for all future sensor plugins (camera, GPS, IMU, e
 - ✅ Configurable via SDF parameters
 - ✅ Can be enabled/disabled via URDF
 - ✅ Clean separation of concerns
+- ✅ TF publishes immediately on sim start (no delay)
 
 ---
 
-#### 3.1.4 Joint State Publisher Plugin (Phase 4)
+#### 3.1.4 Joint State Publisher Plugin (Phase 4) - NEXT
 
 **Goal:** Extract joint state publishing for visualization
 
@@ -678,9 +686,12 @@ This pattern will be followed for all future sensor plugins (camera, GPS, IMU, e
   - [ ] Read joint positions from ECM
   - [ ] Publish to `/sim/joint_states/steering`
   - [ ] Support configurable joint list
+- [ ] Remove joint state publishing from vehicle plugin
 - [ ] Test with RViz
   - [ ] Verify steering visualization works
   - [ ] Check update rate
+
+**After Completion:** Vehicle plugin will be pure dynamics simulation with no publishing responsibilities.
 
 ---
 
@@ -690,6 +701,37 @@ This pattern will be followed for all future sensor plugins (camera, GPS, IMU, e
 - ✅ Self-contained with clear dependencies
 - ✅ Foundation for future sensor plugins
 - ✅ Support multiple vehicle configurations
+- ✅ ECM component-based communication between plugins
+- ✅ Per-plugin configuration via SDF parameters
+
+**Current Plugin Architecture:**
+```
+┌─────────────────────────────────────────────────────┐
+│              GZ Sim Entity (Vehicle)                │
+│                                                     │
+│  ECM Components:                                    │
+│  - Pose, LinearVelocity, AngularVelocity (state)   │
+│  - WorldPoseCmd, World*VelocityCmd (commands)      │
+│  - VehicleControlInput (custom component)          │
+└─────────────────────────────────────────────────────┘
+         ▲              ▲              ▲
+         │              │              │
+    ┌────┴────┐   ┌─────┴─────┐  ┌────┴────┐
+    │ Vehicle │   │ Vehicle   │  │   INS   │
+    │Dynamics │   │ Control   │  │Odometry │
+    │ Plugin  │   │  Plugin   │  │ Plugin  │
+    │         │   │           │  │         │
+    │ Writes: │   │ Writes:   │  │ Reads:  │
+    │ *Cmd    │   │ Control   │  │ Pose    │
+    │ State   │   │ Input     │  │ Vel     │
+    └─────────┘   └───────────┘  └─────────┘
+         │              │              │
+         └──────┬───────┴──────┬───────┘
+                │              │
+         No ROS Topics    ROS Topics:
+         (Pure GZ Sim)    /sim/odometry
+                          /sim/odometry/ground_truth
+```
 
 ---
 
@@ -711,33 +753,59 @@ This pattern will be followed for all future sensor plugins (camera, GPS, IMU, e
 ---
 
 #### 3.2.2 ROS 2 Control Integration
+
+**Architecture Evolution - Physics-Based Control:**
+> **NOTE:** Current vehicle dynamics plugin uses kinematic control (WorldPoseCmd) which bypasses the physics engine.
+> This requires the dual component update pattern (command + state) to maintain sensor compatibility.
+> 
+> **Future Direction:** Implement physics-based control using ROS 2 Control with wheel forces/torques:
+> - Replace WorldPoseCmd override with force/torque commands to wheel joints
+> - Let physics engine compute vehicle motion from tire forces
+> - Benefits:
+>   - Realistic tire slip and traction behavior
+>   - Proper weight transfer and suspension effects
+>   - Natural vehicle dynamics response
+>   - Eliminates need for dual component pattern (physics updates state automatically)
+>   - More accurate simulation for control algorithm development
+> - Implementation approach:
+>   - Use gz_ros2_control for wheel joint torque commands
+>   - Implement tire friction model (Pacejka or simplified)
+>   - Add wheel force/torque actuators in URDF
+>   - Configure physics engine friction parameters
+
 - [ ] Install `gz_ros2_control` package
 - [ ] Create hardware interface for simulated vehicle
-  - [ ] Define joint interfaces (steering joints)
-  - [ ] Define command interfaces (velocity, steering)
+  - [ ] Define joint interfaces (steering joints, wheel joints)
+  - [ ] Define command interfaces (velocity, steering, wheel torques)
   - [ ] Implement read/write methods
 - [ ] Configure controller manager
   - [ ] Add controller manager to launch file
   - [ ] Configure YAML parameters
 - [ ] Define controllers
   - [ ] Steering controller (position or velocity)
-  - [ ] Velocity controller
+  - [ ] Wheel torque controller (for physics-based control)
   - [ ] Configure PID parameters
 - [ ] Update URDF with ros2_control tags
   - [ ] Add `<ros2_control>` block
   - [ ] Define hardware interface plugin
-  - [ ] Specify joints and interfaces
+  - [ ] Specify joints and interfaces (including wheel actuators)
+- [ ] Implement tire friction model
+  - [ ] Research Pacejka tire model or simplified alternatives
+  - [ ] Add tire force calculation based on slip ratio/angle
+  - [ ] Configure friction coefficients for different surfaces
 - [ ] Test controller commands
   - [ ] Publish to controller topics
-  - [ ] Verify vehicle responds
-  - [ ] Tune controller parameters
+  - [ ] Verify vehicle responds realistically
+  - [ ] Compare physics-based vs kinematic control
+  - [ ] Tune controller and tire parameters
 - [ ] Migration path
   - [ ] Create controllers in parallel with existing plugin
-  - [ ] Test both approaches
-  - [ ] Eventually replace plugin control with controllers
+  - [ ] Test both approaches (kinematic and physics-based)
+  - [ ] Eventually replace kinematic WorldPoseCmd with wheel forces
 - [ ] Documentation
   - [ ] Update launch instructions
   - [ ] Document controller topics
+  - [ ] Document physics-based control architecture
   - [ ] Add controller configuration guide
 
 **References:**

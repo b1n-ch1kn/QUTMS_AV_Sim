@@ -88,6 +88,7 @@ private:
 
     // Timing
     std::chrono::steady_clock::duration last_published_time;
+    bool first_update;
 };
 
 }  // namespace vehicle_plugins

@@ -7,7 +7,8 @@ namespace gazebo_plugins {
 namespace vehicle_plugins {
 
 TFBroadcasterPlugin::TFBroadcasterPlugin() 
-    : last_published_time(std::chrono::steady_clock::duration::zero()) {}
+    : last_published_time(std::chrono::steady_clock::duration::zero()),
+      first_update(true) {}
 
 TFBroadcasterPlugin::~TFBroadcasterPlugin() {}
 
@@ -69,6 +70,15 @@ void TFBroadcasterPlugin::PostUpdate(const gz::sim::UpdateInfo &info,
 {
     // Skip if paused
     if (info.paused) {
+        return;
+    }
+
+    // Always publish on first update to initialize TF tree
+    if (first_update) {
+        publishTransforms(info, ecm);
+        last_published_time = info.simTime;
+        first_update = false;
+        rclcpp::spin_some(node);
         return;
     }
 
