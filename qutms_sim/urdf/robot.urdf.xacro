@@ -11,8 +11,8 @@
 
   <!-- Imports -->
   <xacro:include filename="$(find qutms_sim)/urdf/components/wheels.urdf.xacro"/>
-  <!-- <xacro:include filename="$(find qutms_sim)/urdf/components/lidar.urdf.xacro"/> -->
-  <!-- <xacro:include filename="$(find qutms_sim)/urdf/gz_plugins.urdf.xacro"/> -->
+  <xacro:include filename="$(find qutms_sim)/urdf/components/lidar.urdf.xacro"/>
+  <xacro:include filename="$(find qutms_sim)/urdf/gz_plugins.urdf.xacro"/>
   <xacro:include filename="$(find qutms_sim)/urdf/ros2_control.urdf.xacro"/>
 
   <!-- Vehicle Elements -->
@@ -91,32 +91,8 @@
   <xacro:rear_wheel lr_prefix="right" lr_reflect="-1" />
 
   <!-- LiDAR -->    
-  <!-- <xacro:LiDAR parent="chassis" prefix="velodyne" namespace="$(arg namespace)">
+  <xacro:LiDAR parent="chassis" prefix="velodyne" namespace="$(arg namespace)">
     <origin xyz="1.590 0.0 0.0" rpy="0 0 0"/>
-  </xacro:LiDAR> -->
-
-  <!-- gz_ros2_control Gazebo Plugin -->
-  <gazebo>
-    <!-- 
-      gz_ros2_control plugin - bridges ROS 2 Control with Gazebo simulation
-      
-      Provides command and state interfaces for physics-based vehicle control:
-      - Steering joints: position commands (target angle)
-      - Wheel joints: effort commands (torque for propulsion/braking)
-      - State feedback: position and velocity for all joints
-      
-      Controllers (configured in ros2_controllers.yaml):
-      - joint_state_broadcaster: Publishes to /joint_states for robot_state_publisher
-      - ackermann_steering_controller: Bicycle model control via /cmd_vel
-      - wheel effort controllers: Direct torque control for individual wheels
-    -->
-    <plugin filename="gz_ros2_control-system" 
-            name="gz_ros2_control::GazeboSimROS2ControlPlugin">
-      <parameters>$(find qutms_sim)/config/ros2_controllers.yaml</parameters>
-      <ros>
-        <namespace>/$(arg namespace)</namespace>
-      </ros>
-    </plugin>
-  </gazebo>
+  </xacro:LiDAR>
 
 </robot>

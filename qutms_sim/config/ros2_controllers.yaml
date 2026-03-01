@@ -12,12 +12,6 @@
         type: ackermann_steering_controller/AckermannSteeringController
       
       # Effort Controllers - individual wheel torque control
-      front_left_wheel_controller:
-        type: effort_controllers/JointGroupEffortController
-      
-      front_right_wheel_controller:
-        type: effort_controllers/JointGroupEffortController
-      
       rear_left_wheel_controller:
         type: effort_controllers/JointGroupEffortController
       
@@ -68,8 +62,8 @@
       
       # Frame IDs
       base_frame_id: base_footprint
-      odom_frame_id: track
-      enable_odom_tf: true
+      odom_frame_id: odom
+      enable_odom_tf: false
       
       # Covariance (demo values)
       twist_covariance_diagonal: [0.0, 7.0, 14.0, 21.0, 28.0, 35.0]
@@ -88,28 +82,6 @@
   # Current setup: Ackermann controller uses velocity interface for rear wheels.
   # The effort controllers below are defined but should NOT be spawned for rear
   # wheels unless you switch Ackermann to effort interface or front-wheel drive.
-
-  front_left_wheel_controller:
-    ros__parameters:
-      joints:
-        - front_left_wheel_joint
-      interface_name: effort
-      command_interfaces:
-        - effort
-      state_interfaces:
-        - position
-        - velocity
-
-  front_right_wheel_controller:
-    ros__parameters:
-      joints:
-        - front_right_wheel_joint
-      interface_name: effort
-      command_interfaces:
-        - effort
-      state_interfaces:
-        - position
-        - velocity
 
   rear_left_wheel_controller:
     ros__parameters:
