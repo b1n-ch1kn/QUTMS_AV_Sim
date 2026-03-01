@@ -53,11 +53,8 @@
 
     <gazebo reference="${lr_prefix}_${fr_prefix}_wheel">
       <material>Gazebo/Black</material>
-      <mu1>${wheel_friction_mu1}</mu1>
-      <mu2>${wheel_friction_mu2}</mu2>
-      <!-- <minDepth>0.005</minDepth> -->
-      <kp>${wheel_friction_kp}</kp>
     </gazebo>
+
   </xacro:macro>
 
   <!-- ********************************* -->
@@ -115,7 +112,8 @@
       <parent link="${lr_prefix}_steering_hinge"/>
       <child link="${lr_prefix}_front_wheel"/>
       <axis xyz="0 1 0"/>
-      <limit lower="0" upper="0" effort="10000000" velocity="1000000"/>
+      <limit effort="200" velocity="100"/>
+      <dynamics damping="0.1" friction="0.0"/>
     </joint>
 
     <xacro:wheel lr_prefix="${lr_prefix}" fr_prefix="front"/>
@@ -133,7 +131,8 @@
       <parent link="chassis"/>
       <child link="${lr_prefix}_rear_wheel"/>
       <axis xyz="0 1 0"/>
-      <limit lower="0" upper="0" effort="10000000" velocity="1000000"/>
+      <limit effort="200" velocity="100"/>
+      <dynamics damping="0.1" friction="0.0"/>
     </joint>
 
     <xacro:wheel lr_prefix="${lr_prefix}" fr_prefix="rear"/>

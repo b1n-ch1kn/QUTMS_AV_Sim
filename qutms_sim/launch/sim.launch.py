@@ -31,8 +31,9 @@ def get_argument(context, arg):
 
 
 def load_world(context, *args, **kwargs):
-    track = str(get_argument(context, "track") + ".sdf")
-
+    # Use empty world for testing (like gz_ros2_control_demos)
+    use_empty = get_argument(context, "use_empty_world")
+    
     QUTMS = os.path.expanduser(os.environ.get("QUTMS_WS"))
     DISTRO = os.environ.get("ROS_DISTRO")
 
@@ -47,14 +48,21 @@ def load_world(context, *args, **kwargs):
         os.environ.get("GZ_SIM_RESOURCE_PATH", "")
     )
 
-    world_path = join(sim_pkg, "worlds", track)
+    if use_empty == "true":
+        # Use Gazebo's built-in empty world
+        gz_args = "-r -v 1 empty.sdf"
+    else:
+        # Use custom track world
+        track = str(get_argument(context, "track") + ".sdf")
+        world_path = join(sim_pkg, "worlds", track)
+        gz_args = f"-r {world_path} -s"
 
     gz_launch_path = join(get_package_share_directory("ros_gz_sim"), "launch", "gz_sim.launch.py")
     
     gz_sim_launch = IncludeLaunchDescription(
         launch_description_source=PythonLaunchDescriptionSource(gz_launch_path),
         launch_arguments=[
-            ("gz_args", f"-r {world_path} -s"),
+            ("gz_args", gz_args),
             ("on_exit_shutdown", "true"),
         ],
     )
@@ -179,11 +187,13 @@ def load_car(context, *args, **kwargs):
 
     controller_config = join(sim_pkg, "config", "ros2_controllers.yaml")
     controller_yaml = parse_yaml(controller_config)["/**"]
-    controller_names = ["joint_state_broadcaster"]
-    for name, _ in controller_yaml.items():
-        if name == "controller_manager":
-            continue
-        controller_names.append(name)
+    
+    # Only spawn Ackermann controller and joint_state_broadcaster
+    # Based on working gz_ros2_control_demos/ackermann_drive_example
+    controller_names = [
+        "joint_state_broadcaster",
+        "ackermann_steering_controller",  # Using velocity interface with open_loop=false
+    ]
 
     controllers = []
     # Controller spawners - sequentially load and activate controllers
@@ -300,6 +310,11 @@ def generate_launch_description():
                 name="display_car",
                 default_value=display_car,
                 description="Determines if the car is displayed in Rviz",
+            ),
+            DeclareLaunchArgument(
+                name="use_empty_world",
+                default_value="true",
+                description="Use empty.sdf world instead of custom track (for testing)",
             ),
             OpaqueFunction(function=load_visuals),
             # launch the gazebo world

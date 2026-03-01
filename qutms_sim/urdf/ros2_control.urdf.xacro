@@ -48,51 +48,39 @@
       <state_interface name="velocity" />
     </joint>
     
-    <!-- Wheel joints - velocity + effort control for flexibility -->
+    <!-- Wheel joints - both velocity and effort (controller chooses based on config) -->
     <joint name="front_left_wheel_joint">
-      <command_interface name="velocity">
-        <param name="min">-50</param>  <!-- rad/s - adjust based on vehicle specs -->
-        <param name="max">50</param>
-      </command_interface>
+      <command_interface name="velocity" />
       <command_interface name="effort">
-        <param name="min">-100</param>  <!-- Nm - adjust based on vehicle specs -->
-        <param name="max">100</param>
+        <param name="min">-200</param>
+        <param name="max">200</param>
       </command_interface>
       <state_interface name="position" />
       <state_interface name="velocity" />
     </joint>
     <joint name="front_right_wheel_joint">
-      <command_interface name="velocity">
-        <param name="min">-50</param>
-        <param name="max">50</param>
-      </command_interface>
+      <command_interface name="velocity" />
       <command_interface name="effort">
-        <param name="min">-100</param>
-        <param name="max">100</param>
+        <param name="min">-200</param>
+        <param name="max">200</param>
       </command_interface>
       <state_interface name="position" />
       <state_interface name="velocity" />
     </joint>
     <joint name="rear_left_wheel_joint">
-      <command_interface name="velocity">
-        <param name="min">-50</param>
-        <param name="max">50</param>
-      </command_interface>
+      <command_interface name="velocity" />
       <command_interface name="effort">
-        <param name="min">-100</param>
-        <param name="max">100</param>
+        <param name="min">-200</param>
+        <param name="max">200</param>
       </command_interface>
       <state_interface name="position" />
       <state_interface name="velocity" />
     </joint>
     <joint name="rear_right_wheel_joint">
-      <command_interface name="velocity">
-        <param name="min">-50</param>
-        <param name="max">50</param>
-      </command_interface>
+      <command_interface name="velocity" />
       <command_interface name="effort">
-        <param name="min">-100</param>
-        <param name="max">100</param>
+        <param name="min">-200</param>
+        <param name="max">200</param>
       </command_interface>
       <state_interface name="position" />
       <state_interface name="velocity" />

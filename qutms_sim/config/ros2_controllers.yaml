@@ -23,43 +23,77 @@
       
       rear_right_wheel_controller:
         type: effort_controllers/JointGroupEffortController
+      
+      # Velocity Controllers - individual wheel velocity control (TESTING)
+      front_left_wheel_velocity_controller:
+        type: velocity_controllers/JointGroupVelocityController
+      
+      front_right_wheel_velocity_controller:
+        type: velocity_controllers/JointGroupVelocityController
+      
+      rear_left_wheel_velocity_controller:
+        type: velocity_controllers/JointGroupVelocityController
+      
+      rear_right_wheel_velocity_controller:
+        type: velocity_controllers/JointGroupVelocityController
 
 
   # ============================================================================
   # Ackermann Steering Controller Configuration
   # ============================================================================
   # Bicycle model controller - converts cmd_vel to steering + wheel commands
-  # Uses velocity commands for rear wheels (traction) and position for steering
-  # Replicates the behavior of our custom vehicle control plugin
+  # Uses EFFORT (torque) commands for rear wheels (physics simulation)
+  # Uses POSITION commands for steering joints
 
   ackermann_steering_controller:
     ros__parameters:
       # Vehicle reference frame
-      reference_timeout: 0.5  # Timeout for cmd_vel (s)
+      reference_timeout: 2.0  # Timeout for cmd_vel (s)
       
       # Steering configuration
       front_steering: true  # Front-wheel steering
       rear_steering: false  # No rear steering
       
-      # Steering joints (NEW parameter names for Jazzy)
+      # Steering joints
       steering_joints_names: ['left_steering_hinge_joint', 'right_steering_hinge_joint']
       
       # Traction/wheel joints - MUST be exactly 2 for bicycle model (left, right)
-      # Using rear wheels for traction (common for Ackermann/bicycle models)
       traction_joints_names: ['rear_left_wheel_joint', 'rear_right_wheel_joint']
       
-      # Vehicle geometry (NEW parameter names for Jazzy)
+      # Vehicle geometry
       wheelbase: 1.580  # Distance between front and rear axles (m)
       steering_track_width: 1.400  # Distance between left and right steering joints (m)
       traction_track_width: 1.400  # Distance between left and right traction wheels (m)
-      traction_wheels_radius: 0.2032  # Wheel radius (m) - REQUIRED for odometry
+      traction_wheels_radius: 0.2032  # Wheel radius (m)
+      steering_wheels_radius: 0.2032  # Front wheel radius (m)
       
       # Steering limits
       front_steering_angle_limit: 0.6  # Max steering angle (rad) ~34 degrees
       
-      # Command interface types
-      steering_interface_type: position  # Control steering via position
-      traction_interface_type: velocity  # Control wheels via velocity (Ackermann default)
+      # Control mode - CRITICAL parameters from working example
+      open_loop: false  # Use closed-loop control (NOT open-loop)
+      position_feedback: false  # Don't use position feedback
+      velocity_rolling_window_size: 10
+      
+      # Odometry
+      base_frame_id: base_footprint
+      odom_frame_id: odom
+      enable_odom_tf: false
+      twist_covariance_diagonal: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+      pose_covariance_diagonal: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+      
+      # PID gains for closed-loop wheel velocity control (converts velocity error to effort)
+      
+      # PID gains for effort/torque control (only used if traction_interface_type: effort)
+      # Formula: torque = Kp * vel_error + Ki * integral(vel_error) + Kd * d(vel_error)/dt
+      # Now that we know direct torque commands work, use aggressive gains
+      traction_controller:
+        kp: 50.0    # High gain - we know 20 Nm works for movement
+        ki: 5.0    # Integral to eliminate steady-state error
+        kd: 2.0    # Derivative for damping
+        antiwindup: true
+        feedforward_gain: 0.0
+        output_limit: 100.0  # Allow plenty of torque - direct commands of 20 Nm worked
       
       # Velocity and acceleration limits
       linear:
@@ -80,6 +114,13 @@
   # ============================================================================
   # These provide direct torque control to each wheel
   # Can be used for traction control, differential braking, etc.
+  #
+  # WARNING: Do NOT use rear wheel effort controllers simultaneously with
+  # ackermann_steering_controller! They will conflict.
+  # 
+  # Current setup: Ackermann controller uses velocity interface for rear wheels.
+  # The effort controllers below are defined but should NOT be spawned for rear
+  # wheels unless you switch Ackermann to effort interface or front-wheel drive.
 
   front_left_wheel_controller:
     ros__parameters:
@@ -121,6 +162,51 @@
       interface_name: effort
       command_interfaces:
         - effort
+      state_interfaces:
+        - position
+        - velocity
+
+  # Velocity controllers for testing
+  front_left_wheel_velocity_controller:
+    ros__parameters:
+      joints:
+        - front_left_wheel_joint
+      interface_name: velocity
+      command_interfaces:
+        - velocity
+      state_interfaces:
+        - position
+        - velocity
+
+  front_right_wheel_velocity_controller:
+    ros__parameters:
+      joints:
+        - front_right_wheel_joint
+      interface_name: velocity
+      command_interfaces:
+        - velocity
+      state_interfaces:
+        - position
+        - velocity
+
+  rear_left_wheel_velocity_controller:
+    ros__parameters:
+      joints:
+        - rear_left_wheel_joint
+      interface_name: velocity
+      command_interfaces:
+        - velocity
+      state_interfaces:
+        - position
+        - velocity
+
+  rear_right_wheel_velocity_controller:
+    ros__parameters:
+      joints:
+        - rear_right_wheel_joint
+      interface_name: velocity
+      command_interfaces:
+        - velocity
       state_interfaces:
         - position
         - velocity
