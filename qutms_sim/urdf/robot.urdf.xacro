@@ -173,6 +173,16 @@
     </plugin>
   </gazebo>
 
+  <gazebo>
+    <!-- Simulation Reset plugin (resets vehicle and cones) -->
+    <plugin filename="libgazebo_sim_reset.so" name="gazebo_plugins::vehicle_plugins::SimResetPlugin">
+      <ros>
+        <namespace>/$(arg namespace)</namespace>
+      </ros>
+      <base_frame>base_footprint</base_frame>
+    </plugin>
+  </gazebo>
+
   <!-- ROS 2 Control Integration - State Interfaces Only -->
   <!-- Uses gz_ros2_control to read joint states and publish via joint_state_broadcaster -->
   <!-- No command interfaces = no ownership conflict with kinematic vehicle control -->

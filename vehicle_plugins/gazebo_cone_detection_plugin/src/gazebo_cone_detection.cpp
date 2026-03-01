@@ -11,7 +11,7 @@
 namespace gazebo_plugins {
 namespace vehicle_plugins {
 
-ConeDetectionPlugin::ConeDetectionPlugin() : first_update(true), ecm_ptr(nullptr) {}
+ConeDetectionPlugin::ConeDetectionPlugin() : first_update(true) {}
 
 ConeDetectionPlugin::~ConeDetectionPlugin() {}
 
@@ -43,9 +43,6 @@ void ConeDetectionPlugin::Configure(
     this->node = std::make_shared<rclcpp::Node>("cone_detection_plugin_node");
     RCLCPP_INFO(this->node->get_logger(), "Created ROS node inside ConeDetectionPlugin.");
 
-    // Store ECM pointer for reset service
-    ecm_ptr = &ecm;
-
     // Initialize parameters from SDF
     initParams(sdf);
 
@@ -55,10 +52,6 @@ void ConeDetectionPlugin::Configure(
 
     track_marker_pub = node->create_publisher<visualization_msgs::msg::MarkerArray>(("visuals/track_markers"), 1);
     detection_marker_pub = node->create_publisher<visualization_msgs::msg::MarkerArray>(("visuals/detection_markers"), 1);
-
-    // Cone position reset service
-    reset_cone_pos_srv = node->create_service<std_srvs::srv::Trigger>("reset_cones",
-        std::bind(&ConeDetectionPlugin::resetConePosition, this, std::placeholders::_1, std::placeholders::_2));
 
     // Initialize times
     last_track_update = std::chrono::steady_clock::duration::zero();
@@ -126,9 +119,6 @@ void ConeDetectionPlugin::PreUpdate(const gz::sim::UpdateInfo &info,
         // Get initial car world pose (global coordinates)
         car_initial_pose = gz::sim::worldPose(car_link, ecm);
 
-        // Store initial track
-        initial_track = get_ground_truth_track(ecm, track_model, info.simTime, map_frame);
-
         first_update = false;
         last_track_update = info.simTime;
         last_detection_update = info.simTime;
@@ -187,65 +177,6 @@ void ConeDetectionPlugin::update(const gz::sim::UpdateInfo &info,
             publishMarkerArray(lidar_detection, false);
         }
     }
-}
-
-// Resets the position of cones to initial track model
-bool ConeDetectionPlugin::resetConePosition(
-    std::shared_ptr<std_srvs::srv::Trigger::Request>,
-    std::shared_ptr<std_srvs::srv::Trigger::Response> response) 
-{
-    if (!ecm_ptr) {
-        response->success = false;
-        response->message = "ECM not available";
-        return false;
-    }
-
-    auto &ecm = *ecm_ptr;
-    
-    // Get all links of the track model
-    gz::sim::Model track(track_model);
-    auto links = track.Links(ecm);
-
-    // Loop through all cones
-    for (size_t i = 0; i < links.size() && i < initial_track.cones.size(); i++) {
-        driverless_msgs::msg::Cone cone = initial_track.cones[i];
-
-        // Initial position and velocity
-        const gz::math::Pose3d pos(cone.location.x, cone.location.y, cone.location.z, 0.0, 0.0, 0.0);
-        const gz::math::Vector3d vel(0.0, 0.0, 0.0);
-        const gz::math::Vector3d angular(0.0, 0.0, 0.0);
-
-        RCLCPP_DEBUG(node->get_logger(), "Resetting cone %zu to position (%f, %f, %f)", 
-                    i, pos.Pos().X(), pos.Pos().Y(), pos.Pos().Z());
-
-        // Set cone position using ECM
-        auto poseComp = ecm.Component<gz::sim::components::Pose>(links[i]);
-        if (poseComp) {
-            *poseComp = gz::sim::components::Pose(pos);
-        } else {
-            ecm.CreateComponent(links[i], gz::sim::components::Pose(pos));
-        }
-
-        // Set linear velocity
-        auto linVelComp = ecm.Component<gz::sim::components::LinearVelocity>(links[i]);
-        if (linVelComp) {
-            *linVelComp = gz::sim::components::LinearVelocity(vel);
-        } else {
-            ecm.CreateComponent(links[i], gz::sim::components::LinearVelocity(vel));
-        }
-
-        // Set angular velocity
-        auto angVelComp = ecm.Component<gz::sim::components::AngularVelocity>(links[i]);
-        if (angVelComp) {
-            *angVelComp = gz::sim::components::AngularVelocity(angular);
-        } else {
-            ecm.CreateComponent(links[i], gz::sim::components::AngularVelocity(angular));
-        }
-    }
-
-    response->success = true;
-    response->message = "Cones reset successfully";
-    return true;
 }
 
 // VISUALS

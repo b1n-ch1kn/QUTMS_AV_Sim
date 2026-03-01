@@ -5,7 +5,7 @@
     foxglove: true # set to true to launch the Foxglove connection (About: https://foxglove.dev/)
     use_sim_time: true # set to true to use the simulation time (counts up from 0) otherwise uses the system time
     display_car: "false" # set to true to display QEV-3D (for RVIZ only) otherwise displays a box car
-    namespace: "sim" # all topics will be prepended with this name (eg /control -> /sim/control)
+    namespace: "" # all topics will be prepended with this name (eg /control -> /sim/control)
     map_frame: "track" # world frame
     odom_frame: "track" # internal odometry estimate frame
     base_frame: "base_footprint" # robot frame

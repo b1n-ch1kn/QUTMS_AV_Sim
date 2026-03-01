@@ -56,8 +56,6 @@ class ConeDetectionPlugin : public gz::sim::System,
    private:
     void update(const gz::sim::UpdateInfo &info, gz::sim::EntityComponentManager &ecm);
     void initParams(const std::shared_ptr<const sdf::Element> &sdf);
-    bool resetConePosition(std::shared_ptr<std_srvs::srv::Trigger::Request> request,
-                           std::shared_ptr<std_srvs::srv::Trigger::Response> response);
 
     // GZ Sim
     gz::sim::Entity _entity;
@@ -76,16 +74,12 @@ class ConeDetectionPlugin : public gz::sim::System,
     double detection_update_rate;
     std::chrono::steady_clock::duration last_track_update;
     std::chrono::steady_clock::duration last_detection_update;
-    driverless_msgs::msg::ConeDetectionStamped initial_track;
 
     // ROS Publishers
     rclcpp::Publisher<driverless_msgs::msg::ConeDetectionStamped>::SharedPtr track_pub;
     rclcpp::Publisher<driverless_msgs::msg::ConeDetectionStamped>::SharedPtr detection_pub;
     rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr track_marker_pub;
     rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr detection_marker_pub;
-
-    // ROS Services
-    rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr reset_cone_pos_srv;
 
     SensorConfig_t detection_config;
 

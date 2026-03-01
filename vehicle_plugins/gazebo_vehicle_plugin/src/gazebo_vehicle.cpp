@@ -1,4 +1,5 @@
 #include "gazebo_vehicle_plugin/gazebo_vehicle.hpp"
+#include "gazebo_vehicle_plugin/VehicleState.hh"
 
 #include <gz/sim/components/AngularVelocity.hh>
 #include <gz/sim/components/AngularVelocityCmd.hh>
@@ -47,16 +48,6 @@ void VehiclePlugin::Configure(
 
     // Initialize parameters from SDF
     initParams(sdf);
-
-    // ROS Publishers
-    // NOTE: Joint states now published by gz_ros2_control joint_state_broadcaster
-    // We no longer publish manually - gz_ros2_control reads joint positions from ECM
-    // and publishes all joints to /sim/joint_states for robot_state_publisher
-    
-    // ROS Services
-    reset_vehicle_pos_srv = node->create_service<std_srvs::srv::Trigger>(
-        "reset_vehicle",
-        std::bind(&VehiclePlugin::resetVehiclePosition, this, std::placeholders::_1, std::placeholders::_2));
 
     max_steering_rate = (vehicle_model->getParam().input_ranges.delta.max - 
                         vehicle_model->getParam().input_ranges.delta.min) / steering_lock_time;
@@ -130,32 +121,14 @@ void VehiclePlugin::setPositionFromWorld(gz::sim::EntityComponentManager &ecm) {
     state.r_x = 0.0;
     state.r_y = 0.0;
     state.r_z = 0.0;
-}
-
-bool VehiclePlugin::resetVehiclePosition(
-    std::shared_ptr<std_srvs::srv::Trigger::Request>,
-    std::shared_ptr<std_srvs::srv::Trigger::Response> response) 
-{
-    // Reset state directly to initial pose
-    state.x = offset.Pos().X();
-    state.y = offset.Pos().Y();
-    state.z = offset.Pos().Z();
-    state.yaw = offset.Rot().Yaw();
-    state.v_x = 0.0;
-    state.v_y = 0.0;
-    state.v_z = 0.0;
-    state.r_x = 0.0;
-    state.r_y = 0.0;
-    state.r_z = 0.0;
+    state.a_x = 0.0;
+    state.a_y = 0.0;
+    state.a_z = 0.0;
     
-    // Note: Control commands are now handled by the vehicle_control_plugin
-    // Vehicle will stop naturally when no commands are received
-
-    // NOTE: In GZ Sim, setting pose/velocity requires WorldPoseCmd and related components
-    // This will be handled in the update loop
+    // Store initial state in ECM for other plugins to access
+    ecm.CreateComponent(_entity, gz::sim::components::VehicleState(state));
     
-    response->success = true;
-    return true;
+    RCLCPP_INFO(node->get_logger(), "Vehicle state initialized in ECM");
 }
 
 void VehiclePlugin::setModelState(gz::sim::EntityComponentManager &ecm) {
@@ -234,6 +207,13 @@ void VehiclePlugin::update(const gz::sim::UpdateInfo &info,
 
     last_sim_time = info.simTime;
 
+    // Read current vehicle state from ECM
+    auto stateComp = ecm.Component<gz::sim::components::VehicleState>(_entity);
+    if (stateComp) {
+        // Update internal state from ECM (single source of truth)
+        state = stateComp->Data();
+    }
+
     // Read control inputs from ECM (provided by vehicle_control_plugin)
     auto controlData = ecm.Component<gz::sim::components::VehicleControlInput>(_entity);
     if (controlData) {
@@ -272,6 +252,11 @@ void VehiclePlugin::update(const gz::sim::UpdateInfo &info,
     // Update state
     vehicle_model->updateState(state, output, dt);
 
+    // Write updated state back to ECM (single source of truth)
+    if (stateComp) {
+        *stateComp = gz::sim::components::VehicleState(state);
+    }
+
     // Command steering joint positions using JointPositionReset
     // This is the correct component for kinematic control (bypasses physics)
     // The physics system will update JointPosition state, which gz_ros2_control reads
@@ -294,10 +279,6 @@ void VehiclePlugin::update(const gz::sim::UpdateInfo &info,
             rightJointPosReset->Data()[0] = output.steering;
         }
     }
-
-    // Joint positions set via JointPositionReset above
-    // gz_ros2_control reads these from ECM and publishes via joint_state_broadcaster
-    // Flow: JointPositionReset → Physics → JointPosition (state) → gz_ros2_control → /sim/joint_states
 
     setModelState(ecm);
 }

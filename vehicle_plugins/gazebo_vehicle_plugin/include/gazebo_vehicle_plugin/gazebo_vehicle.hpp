@@ -63,8 +63,6 @@ class VehiclePlugin : public gz::sim::System,
    private:
     void initParams(const std::shared_ptr<const sdf::Element> &sdf);
     void setPositionFromWorld(gz::sim::EntityComponentManager &ecm);
-    bool resetVehiclePosition(std::shared_ptr<std_srvs::srv::Trigger::Request> request,
-                              std::shared_ptr<std_srvs::srv::Trigger::Response> response);
     void setModelState(gz::sim::EntityComponentManager &ecm);
     void update(const gz::sim::UpdateInfo &info, gz::sim::EntityComponentManager &ecm);
 
@@ -83,9 +81,6 @@ class VehiclePlugin : public gz::sim::System,
 
     // Rate to update vehicle dynamics
     double update_rate;
-
-    // ROS Services
-    rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr reset_vehicle_pos_srv;
 
     // Steering joints
     gz::sim::Entity left_steering_joint;
