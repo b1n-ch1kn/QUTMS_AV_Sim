@@ -1,0 +1,190 @@
+<?xml version="1.0"?>
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro">
+
+  <!-- 
+    Custom Gazebo Simulation Plugins
+    
+    This file contains all custom-developed Gazebo plugins for the QUTMS autonomous vehicle simulation.
+    Each plugin is a modular, independent system that interacts via ECM (Entity Component Manager).
+    
+    Plugin Architecture:
+    - Vehicle Dynamics: Core bicycle model physics (kinematic control)
+    - Vehicle Control: Handles ROS command inputs (Ackermann/Twist)
+    - INS Odometry: Simulated INS sensor with configurable noise
+    - TF Broadcaster: Publishes vehicle transform tree
+    - Cone Detection: Ground truth cone detection simulation
+    - Sim Reset: Centralized reset for vehicle and world
+    Gazebo Standard:
+    - gz_ros2_control: Reads joint states for robot_state_publisher (no command interfaces)
+    
+    Plugins communicate via ECM components:
+    - VehicleControlInput: Control commands (from control → dynamics)
+    - VehicleState: Complete vehicle dynamics state (13 fields)
+    - Standard components: Pose, Velocity, JointPosition, etc.
+  -->
+
+  <xacro:arg name="namespace" default="sim"/>
+
+  <!-- Vehicle Dynamics Plugin -->
+  <gazebo>
+    <!--
+      Core vehicle dynamics simulation using kinematic bicycle model.
+      
+      Reads: VehicleControlInput (from vehicle_control_plugin)
+      Writes: WorldPoseCmd, WorldLinearVelocityCmd, WorldAngularVelocityCmd
+              JointPositionReset (steering joints)
+              VehicleState (full dynamics state for other plugins)
+      
+      Future: Will be refactored to physics-based control with wheel torques
+    -->
+    <plugin filename="libgazebo_vehicle.so" name="gazebo_plugins::vehicle_plugins::VehiclePlugin">
+      <ros>
+        <namespace>/$(arg namespace)</namespace>
+      </ros>
+      <vehicle_params>$(find qutms_sim)/config/vehicle_params.yaml</vehicle_params>
+      <update_rate>50.0</update_rate>
+      <steering_lock_time>1.5</steering_lock_time>
+    </plugin>
+  </gazebo>
+
+  <!-- Vehicle Control Plugin -->
+  <gazebo>
+    <!--
+      Handles ROS command inputs and converts to ECM control components.
+      
+      Subscribes: /$(arg namespace)/control/ackermann_cmd (ackermann_msgs/AckermannDrive)
+                  /$(arg namespace)/control/twist_cmd (geometry_msgs/Twist)
+      Writes: VehicleControlInput (ECM component for vehicle dynamics)
+      
+      Features: Command timeout handling, dual input support
+    -->
+    <plugin filename="libgazebo_vehicle_control.so" name="gazebo_plugins::vehicle_plugins::VehicleControlPlugin">
+      <ros>
+        <namespace>/$(arg namespace)</namespace>
+      </ros>
+      <control_delay>0.035</control_delay>
+      <enable_ackermann>true</enable_ackermann>
+      <enable_twist>true</enable_twist>
+      <ackermann_topic>control/ackermann_cmd</ackermann_topic>
+      <twist_topic>control/twist_cmd</twist_topic>
+    </plugin>
+  </gazebo>
+
+  <!-- INS Odometry Plugin -->
+  <gazebo>
+    <!--
+      Simulated INS sensor with configurable Gaussian noise.
+      
+      Reads: Pose, LinearVelocity, AngularVelocity (ECM state components)
+      Publishes: /$(arg namespace)/odometry (nav_msgs/Odometry) - with noise
+                 /$(arg namespace)/odometry/ground_truth (nav_msgs/Odometry) - perfect data
+      
+      Noise model: Position, velocity, and orientation noise from vehicle_params.yaml
+    -->
+    <plugin filename="libgazebo_ins_odometry.so" name="gazebo_plugins::vehicle_plugins::INSOdometryPlugin">
+      <ros>
+        <namespace>/$(arg namespace)</namespace>
+      </ros>
+      <noise_params>$(find qutms_sim)/config/vehicle_params.yaml</noise_params>
+      <publish_rate>50.0</publish_rate>
+      <odom_frame>track</odom_frame>
+      <base_frame>base_footprint</base_frame>
+      <topic_name>odometry</topic_name>
+      <enable_ground_truth>true</enable_ground_truth>
+      <ground_truth_topic_name>odometry/ground_truth</ground_truth_topic_name>
+    </plugin>
+  </gazebo>
+
+  <!-- TF Broadcaster Plugin -->
+  <gazebo>
+    <!--
+      Publishes vehicle transform tree.
+      
+      Reads: Pose (ECM component)
+      Publishes: /tf (map → odom → base_footprint)
+      
+      Note: Joint transforms handled by robot_state_publisher via gz_ros2_control
+    -->
+    <plugin filename="libgazebo_tf_broadcaster.so" name="gazebo_plugins::vehicle_plugins::TFBroadcasterPlugin">
+      <ros>
+        <namespace>/$(arg namespace)</namespace>
+      </ros>
+      <publish_rate>50.0</publish_rate>
+      <map_frame>track</map_frame>
+      <odom_frame>odom</odom_frame>
+      <base_frame>base_footprint</base_frame>
+      <publish_odom_tf>false</publish_odom_tf>
+    </plugin>
+  </gazebo>
+
+  <!-- Cone Detection Plugin -->
+  <gazebo>
+    <!--
+      Simulates cone detection with configurable sensor characteristics.
+      
+      Reads: Track model (cone positions), Vehicle pose
+      Publishes: /$(arg namespace)/track/ground_truth (driverless_msgs/ConeDetectionStamped)
+                 /$(arg namespace)/detections/ground_truth (driverless_msgs/ConeDetectionStamped)
+      
+      Features: FOV filtering, range filtering, bearing/range noise, color detection toggle
+    -->
+    <plugin filename="libgazebo_cone_detection.so" name="gazebo_plugins::vehicle_plugins::ConeDetectionPlugin">
+      <ros>
+        <namespace>/$(arg namespace)</namespace>
+      </ros>
+      <track_update_rate>20.0</track_update_rate>
+      <lidar_update_rate>10.0</lidar_update_rate>
+      <lidar_frame_id>velodyne</lidar_frame_id>
+      <lidar_min_view_distance>1.0</lidar_min_view_distance>
+      <lidar_max_view_distance>20.0</lidar_max_view_distance>
+      <lidar_fov>3.141593</lidar_fov>
+      <lidar_range_noise>0.01</lidar_range_noise>
+      <lidar_bearing_noise>0.001</lidar_bearing_noise>
+      <lidar_detects_colour>false</lidar_detects_colour>
+      <lidar_offset_x>1.59</lidar_offset_x>
+      <lidar_offset_z>0.25</lidar_offset_z>
+      <base_frame>base_footprint</base_frame>
+    </plugin>
+  </gazebo>
+
+  <!-- Simulation Reset Plugin -->
+  <gazebo>
+    <!--
+      Centralized simulation reset for vehicle and track.
+      
+      Service: /$(arg namespace)/reset_simulation (std_srvs/Trigger)
+      
+      Resets:
+      - VehicleState ECM component to initial values
+      - WorldPoseCmd/WorldLinearVelocityCmd/WorldAngularVelocityCmd to spawn position
+      - All cone link poses to original track layout
+      
+      Enables quick simulation restart without relaunching
+    -->
+    <plugin filename="libgazebo_sim_reset.so" name="gazebo_plugins::vehicle_plugins::SimResetPlugin">
+      <ros>
+        <namespace>/$(arg namespace)</namespace>
+      </ros>
+      <base_frame>base_footprint</base_frame>
+    </plugin>
+  </gazebo>
+
+
+  <!-- gz_ros2_control Gazebo Plugin -->
+  <gazebo>
+    <!-- 
+      gz_ros2_control plugin - reads joint states from simulation
+      joint_state_broadcaster publishes to /$(arg namespace)/joint_states for robot_state_publisher
+      
+      Controller configuration loaded from ros2_controllers.yaml
+    -->
+    <plugin filename="gz_ros2_control-system" 
+            name="gz_ros2_control::GazeboSimROS2ControlPlugin">
+      <parameters>$(find qutms_sim)/config/ros2_controllers.yaml</parameters>
+      <ros>
+        <namespace>/$(arg namespace)</namespace>
+      </ros>
+    </plugin>
+  </gazebo>
+
+</robot>

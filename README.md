@@ -147,18 +147,19 @@ ros2 launch qutms_sim sim.launch.py track:=small_track foxglove:=true
 ## ROS 2 Topics
 
 ### Subscribed Topics (Control)
-- `/sim/control/ackermann_cmd` - Ackermann drive commands
-- `/sim/control/twist_cmd` - Twist (velocity) commands
+- `/control/ackermann_cmd` - Ackermann drive commands
+- `/control/twist_cmd` - Twist (velocity) commands
 
 ### Published Topics (Sensors & State)
-- `/sim/odometry` - Noisy odometry (simulated sensor)
-- `/sim/odometry/ground_truth` - Perfect odometry (for debugging)
-- `/sim/joint_states/steering` - Steering joint angles
-- `/sim/scan` - LIDAR scan data
-- `/sim/cones` - Detected cones (from cone detection plugin)
+- `/odometry` - Noisy odometry (simulated INS sensor)
+- `/odometry/ground_truth` - Perfect odometry (for debugging)
+- `/joint_states` - All joint states (steering + wheels)
+- `/scan` - LIDAR scan data
+- `/track/ground_truth` - Ground truth track (all cones)
+- `/detections/ground_truth` - Simulated cone detections
 
 ### Services
-- `/sim/reset_vehicle` - Reset vehicle to starting position
+- `/reset_simulation` - Reset vehicle and cones to starting positions
 
 ## Sending Commands
 
@@ -166,7 +167,7 @@ ros2 launch qutms_sim sim.launch.py track:=small_track foxglove:=true
 
 ```bash
 # Publish Ackermann command
-ros2 topic pub /sim/control/ackermann_cmd ackermann_msgs/msg/AckermannDriveStamped "
+ros2 topic pub /control/ackermann_cmd ackermann_msgs/msg/AckermannDriveStamped "
 drive:
   speed: 5.0
   steering_angle: 0.2
@@ -174,7 +175,7 @@ drive:
 "
 
 # Publish Twist command
-ros2 topic pub /sim/control/twist_cmd geometry_msgs/msg/Twist "
+ros2 topic pub /control/twist_cmd geometry_msgs/msg/Twist "
 linear:
   x: 2.0
 angular:
@@ -182,10 +183,10 @@ angular:
 "
 ```
 
-### Reset Vehicle
+### Reset Simulation
 
 ```bash
-ros2 service call /sim/reset_vehicle std_srvs/srv/Trigger
+ros2 service call /reset_simulation std_srvs/srv/Trigger
 ```
 
 ## Configuration
@@ -217,19 +218,21 @@ Edit `qutms_sim/config/motion_noise.yaml` to configure:
 GZ Sim plugins (vehicle dynamics, cone detection, etc.) are configured directly in the URDF files using SDF parameters. Plugin parameters are embedded as XML elements within the `<plugin>` tags.
 
 To modify plugin behavior, edit the corresponding URDF/xacro files:
-- **Vehicle Plugin**: `qutms_sim/urdf/robot.urdf.xacro` - Configure vehicle dynamics, update rates, frame IDs, and control delays
-- **Cone Detection Plugin**: `qutms_sim/urdf/robot.urdf.xacro` - Configure LIDAR parameters, detection ranges, and noise settings
-- **Sensor Plugins**: `qutms_sim/urdf/lidar.urdf.xacro` - Configure sensor-specific parameters
+- **Custom Plugins**: `qutms_sim/urdf/gz_plugins.urdf.xacro` - All 6 custom Gazebo plugins (vehicle dynamics, control, sensors, reset)
+- **ROS 2 Control**: `qutms_sim/urdf/ros2_control.urdf.xacro` - Joint state interfaces and gz_ros2_control configuration
+- **Vehicle Structure**: `qutms_sim/urdf/robot.urdf.xacro` - Chassis, inertia, and component assembly
+- **Components**: `qutms_sim/urdf/components/` - Wheels, LIDAR, and other vehicle components
 
 Example plugin configuration in URDF:
 ```xml
-<plugin filename="libgazebo_vehicle_plugin" name="vehicle_plugin">
-  <vehicle_params>$(find qutms_sim)/config/vehicle.yaml</vehicle_params>
-  <update_rate>1000.0</update_rate>
-  <publish_rate>200.0</publish_rate>
-  <map_frame>track</map_frame>
-  <odom_frame>track</odom_frame>
-  <base_frame>base_footprint</base_frame>
+<!-- Vehicle dynamics plugin -->
+<plugin filename="libgazebo_vehicle.so" name="gazebo_plugins::vehicle_plugins::VehiclePlugin">
+  <ros>
+    <namespace>/</namespace>  <!-- No namespace by default -->
+  </ros>
+  <vehicle_params>$(find qutms_sim)/config/vehicle_params.yaml</vehicle_params>
+  <update_rate>50.0</update_rate>
+  <steering_lock_time>1.5</steering_lock_time>
 </plugin>
 ```
 
@@ -342,24 +345,18 @@ gz sim --version
 
 ### Add New Sensor
 
-1. Add sensor to URDF in `qutms_sim/urdf/`
-2. Use GZ Sim sensor systems
-3. Bridge to ROS topics using ros_gz_bridge
+1. Create sensor xacro in `qutms_sim/urdf/components/`
+2. Include in `qutms_sim/urdf/robot.urdf.xacro`
+3. Use GZ Sim sensor systems
+4. Bridge to ROS topics in `qutms_sim/config/bridge.yaml`
 
 ## Additional Resources
 
-- [Comprehensive TODO](./COMPREHENSIVE_TODO.md) - Complete migration history and roadmap
-- [Migration Status](./JAZZY_MIGRATION_STATUS.md) - Current migration progress
-- [Migration Guide](./MIGRATION_GUIDE.md) - Detailed API changes
+- [TODO](./COMPREHENSIVE_TODO.md) - Complete migration history and roadmap
 - [GZ Sim Tutorials](https://gazebosim.org/docs/harmonic/tutorials)
 - [ROS 2 Jazzy Documentation](https://docs.ros.org/en/jazzy/)
 
 ## Support
-
-For issues specific to QUTMS_AV_Sim:
-- Check [JAZZY_MIGRATION_STATUS.md](./JAZZY_MIGRATION_STATUS.md) for known issues
-- Review [MIGRATION_GUIDE.md](./MIGRATION_GUIDE.md) for API changes
-- See [COMPREHENSIVE_TODO.md](./COMPREHENSIVE_TODO.md) for planned features
 
 For GZ Sim issues:
 - [GZ Community](https://community.gazebosim.org/)

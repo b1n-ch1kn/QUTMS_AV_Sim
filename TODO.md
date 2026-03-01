@@ -1,7 +1,7 @@
 # QUTMS_AV_Sim - Comprehensive Development Roadmap
 
-**Last Updated:** 2026-02-28  
-**Current Status:** ✅ Phase 1 & 2 Complete - Ready for Phase 3  
+**Last Updated:** 2026-03-01  
+**Current Status:** ✅ Phase 1 & 2 Complete | 🚀 Phase 3 Sprint 1 Complete  
 **ROS Version:** ROS 2 Jazzy Jalisco  
 **Simulator:** Gazebo Harmonic (GZ Sim 8)
 
@@ -131,7 +131,7 @@
   - `gz-sim-user-commands-system`
 
 #### LIDAR Sensor Migration
-**File:** `qutms_sim/urdf/lidar.urdf.xacro`
+**File:** `qutms_sim/urdf/components/lidar.urdf.xacro`
 
 **Changes:**
 - [x] Changed sensor type: `ray` → `gpu_lidar`
@@ -379,7 +379,7 @@ nav_msgs::msg::Odometry stateToOdom(const State &state, const rclcpp::Time &stam
 - [x] Added explicit `<topic>/scan</topic>` element
 - [x] Added `<gz_frame_id>${prefix}</gz_frame_id>` element
 - [x] Set `<visualize>true</visualize>` for visualization
-- [x] File: `qutms_sim/urdf/lidar.urdf.xacro`
+- [x] File: `qutms_sim/urdf/components/lidar.urdf.xacro`
 
 **Result:**
 - LIDAR publishes to /scan (Gazebo topic)
@@ -396,27 +396,32 @@ nav_msgs::msg::Odometry stateToOdom(const State &state, const rclcpp::Time &stam
 - ✅ Bicycle model physics simulation (kinematic)
 - ✅ Pose/velocity commanded via ECM components (WorldPoseCmd, WorldLinearVelocityCmd, WorldAngularVelocityCmd)
 - ✅ State components updated for sensor plugin reads (Pose, LinearVelocity, AngularVelocity)
+- ✅ VehicleState ECM component (complete vehicle dynamics state - 13 fields)
 - ✅ Ackermann command control (`/control/ackermann_cmd`) - via separate control plugin
 - ✅ Twist command control (`/control/twist_cmd`) - via separate control plugin
 - ✅ Steering rate limiting
 - ✅ Velocity control with acceleration limits
-- ✅ Reset service (`/reset_vehicle_pos`)
-- ✅ Modular plugin architecture (dynamics, control, sensors separated)
+- ✅ Reset service (`/reset_simulation`) - centralized vehicle & cone reset
+- ✅ **Fully modular plugin architecture** - 6 independent plugins communicating via ECM
 
 **Odometry & State Estimation:**
-- ✅ Ground truth odometry (`/odom/ground_truth`) - via INS odometry plugin
-- ✅ Noisy odometry (`/odom`) - via INS odometry plugin
+- ✅ Ground truth odometry (`/odometry/ground_truth`) - via INS odometry plugin
+- ✅ Noisy odometry (`/odometry`) - via INS odometry plugin
 - ✅ Motion noise model applied (Gaussian noise on position/velocity)
-- ✅ Update rate: 50 Hz (vehicle model)
+- ✅ Update rate: 50 Hz (vehicle dynamics plugin)
 - ✅ Publish rate: 50 Hz (INS odometry plugin)
 - ✅ Timestamps: Synchronized with simulation time
 - ✅ ECM-based architecture (plugins read state from ECM components)
+- ✅ Configurable noise parameters via YAML
+- ✅ Optional ground truth publishing (per-plugin configuration)
 
 **TF Broadcasting:**
-- ✅ TF tree: map → base_link - via TF broadcaster plugin
+- ✅ TF tree: track → odom → base_footprint - via TF broadcaster plugin
+- ✅ Joint states via gz_ros2_control → robot_state_publisher
+- ✅ Complete TF tree: track → odom → base_footprint → chassis → wheels/steering
 - ✅ Synchronized with simulation clock
 - ✅ First update publishes immediately (no delayed transforms)
-- ✅ Joint states published (steering joints) - still in vehicle plugin
+- ✅ All 6 joints published (2 steering, 4 wheels)
 - ✅ Frame transformations correct
 - ✅ Configurable frame IDs via SDF parameters
 
@@ -429,15 +434,18 @@ nav_msgs::msg::Odometry stateToOdom(const State &state, const rclcpp::Time &stam
   
 **Cone Detection:**
 - ✅ Ground truth track (`/track/ground_truth`)
-  - 10Hz publish rate
+  - 20Hz publish rate
   - Correct world positions for all cones
   - Color classification (blue/yellow/orange)
+  - Independent cone detection plugin
   
 - ✅ Simulated detections (`/detections/ground_truth`)
-  - 50Hz publish rate
-  - FOV and range filtering
+  - 10Hz publish rate
+  - FOV and range filtering (configurable)
   - Proper coordinates relative to car
+  - Range and bearing noise simulation
   - Has subscribers check for efficiency
+  - Configurable LIDAR offset and parameters
 
 **Physics Simulation:**
 - ✅ 1:1 sim-to-real time ratio
@@ -454,6 +462,31 @@ nav_msgs::msg::Odometry stateToOdom(const State &state, const rclcpp::Time &stam
 - ✅ Clean compilation with no errors
 - ✅ Fast rebuild with symlink install
 - ✅ Automatic dependency management (ament_cmake_auto)
+- ✅ Modular URDF structure (separate files for plugins, control, structure)
+
+**Plugin Architecture:**
+- ✅ **6 Independent Gazebo Plugins:**
+  1. `gazebo_vehicle.so` - Vehicle dynamics (bicycle model)
+  2. `gazebo_vehicle_control.so` - ROS command input handling
+  3. `gazebo_ins_odometry.so` - INS sensor simulation
+  4. `gazebo_tf_broadcaster.so` - Transform broadcasting
+  5. `gazebo_cone_detection.so` - Cone detection simulation
+  6. `gazebo_sim_reset.so` - Centralized simulation reset
+- ✅ ECM-based inter-plugin communication
+- ✅ Custom ECM components: VehicleControlInput, VehicleState
+- ✅ Per-plugin SDF configuration
+- ✅ Plugins can be enabled/disabled via URDF
+- ✅ ROS 2 Control integration (gz_ros2_control + joint_state_broadcaster)
+
+**URDF Organization:**
+- ✅ Modular file structure:
+  - `robot.urdf.xacro` - Main vehicle structure (chassis, wheels, sensors)
+  - `gz_plugins.urdf.xacro` - All 6 custom Gazebo plugins
+  - `ros2_control.urdf.xacro` - ROS 2 Control configuration
+  - `components/wheels.urdf.xacro` - Wheel definitions
+  - `components/lidar.urdf.xacro` - LIDAR sensor
+- ✅ Comprehensive documentation in each file
+- ✅ Easy to modify plugins without touching vehicle structure
 
 ---
 
@@ -480,60 +513,76 @@ nav_msgs::msg::Odometry stateToOdom(const State &state, const rclcpp::Time &stam
 ### 🎯 System Capabilities
 
 **What Works:**
-1. Full autonomous vehicle simulation
-2. LIDAR-based perception ready
-3. Cone detection ground truth for validation
-4. Realistic vehicle dynamics
-5. Multiple test tracks
-6. Reset and restart capabilities
-7. ROS 2 integration complete
-8. Time-synchronized data streams
+1. ✅ Full autonomous vehicle simulation
+2. ✅ Modular plugin architecture (6 independent plugins)
+3. ✅ LIDAR-based perception ready
+4. ✅ Cone detection ground truth for validation
+5. ✅ Realistic kinematic vehicle dynamics (bicycle model)
+6. ✅ ROS 2 Control integration (state interfaces)
+7. ✅ Multiple test tracks (10 tracks)
+8. ✅ Centralized reset capabilities (vehicle + cones)
+9. ✅ Complete ROS 2 Jazzy integration
+10. ✅ Time-synchronized data streams
+11. ✅ ECM-based plugin communication
+12. ✅ Configurable sensor noise models
+13. ✅ Modular URDF structure
 
-**What's Missing (Phase 3+):**
-1. Camera sensor
-2. IMU sensor
-3. GPS/GNSS sensor
-4. ROS 2 Control integration
-5. Advanced tire dynamics
+**What's Missing/Next Steps:**
+1. 🎯 Physics-based vehicle control (wheel torques, tire model) - **NEXT**
+2. Camera sensor
+3. IMU sensor
+4. GPS/GNSS sensor
+5. Advanced tire dynamics (Pacejka model)
 6. Suspension modeling
 7. Additional vehicle models
-8. Modular plugin system
-9. Realistic sensor noise models
-10. Visualization fixes
+8. Vehicle mesh visualization fix
+9. More realistic sensor noise models (IMU gyro drift, etc.)
+10. Multi-vehicle simulation support
 
 ---
 
-## Phase 3: Feature Enhancements (In Planning)
+## Phase 3: Feature Enhancements (In Progress)
 
-**Target:** Next development phase  
-**Focus:** Modular architecture, sensor expansion, ROS 2 Control, system integration
+**Current Status:** Sprint 1 Complete ✅ | Sprint 2 Ready 🚀  
+**Target:** Physics-based vehicle control, advanced sensors, system integration  
+**Focus:** Transition from kinematic to physics-based simulation
 
-### Sprint 1: Modular Plugin System (High Priority) 🚀
+### Sprint 1: Modular Plugin System ✅ COMPLETE
 
-**WHY THIS IS FIRST:** The current monolithic `gazebo_vehicle_plugin` mixes concerns (dynamics, sensors, control, TF). Separating into modular plugins enables:
-- Independent development/testing of features
-- Easy addition/removal of sensors without touching core code
-- Better code organization and maintainability
-- Reusable plugins across different vehicle configurations
-- Foundation for all future enhancements
+**Objective:** Separate monolithic vehicle plugin into independent, modular plugins
 
-Plugins will be refactored into a modular architecture where each plugin is a standalone GZ Sim plugin (`.so` file) loaded independently via URDF. Plugins communicate through ECM components and ROS topics.
+**Why This Was First:** The monolithic `gazebo_vehicle_plugin` mixed concerns (dynamics, sensors, control, TF). Separating into modular plugins enabled:
+- ✅ Independent development/testing of features
+- ✅ Easy addition/removal of sensors without touching core code
+- ✅ Better code organization and maintainability
+- ✅ Reusable plugins across different vehicle configurations
+- ✅ Foundation for all future enhancements
 
-**Current State:** `gazebo_vehicle_plugin` contains:
+**Achievement:** Successfully refactored into modular architecture where each plugin is a standalone GZ Sim plugin (`.so` file) loaded independently via URDF. Plugins communicate through ECM components and ROS topics.
+
+**Completed Phases:**
 - Vehicle dynamics/model simulation
 - INS odometry publishing (noisy sensor)
 - Ground truth odometry publishing
 - TF broadcasting
 - Control input handling (Ackermann/Twist)
 - Joint state publishing
-- Reset service
+**Completed Phases:**
+1. Phase 1: INS Odometry Plugin ✅
+2. Phase 2: Vehicle Control Plugin ✅
+3. Phase 3: TF Broadcaster Plugin ✅
+4. Phase 4: Joint State Publisher (gz_ros2_control) ✅
+5. Phase 5: Simulation Reset Plugin ✅
+6. Phase 6: URDF Modular Refactoring ✅
 
-**Target State:** Separate plugins:
-- `vehicle_dynamics_plugin` - Core vehicle model, state updates, ground truth
-- `ins_odometry_plugin` - Simulated INS sensor (noisy odometry)
-- `vehicle_control_plugin` - Control input handling (Ackermann/Twist)
-- `tf_broadcaster_plugin` - TF tree publishing
-- `joint_state_publisher_plugin` - Steering joint visualization
+**Final Architecture Achieved:**
+- ✅ `gazebo_vehicle.so` - Core vehicle dynamics (bicycle model)
+- ✅ `gazebo_vehicle_control.so` - ROS command input handling
+- ✅ `gazebo_ins_odometry.so` - INS sensor simulation
+- ✅ `gazebo_tf_broadcaster.so` - Transform broadcasting
+- ✅ `gazebo_cone_detection.so` - Cone detection simulation
+- ✅ `gazebo_sim_reset.so` - Centralized simulation reset
+- ✅ ROS 2 Control integration via gz_ros2_control
 
 ---
 
@@ -801,6 +850,91 @@ State vehicle_state = stateComp->Data();
 
 ---
 
+#### 3.1.6 URDF Modular Refactoring (Phase 6) ✅ COMPLETE
+
+**Goal:** Refactor monolithic URDF into modular, maintainable files
+
+**Implementation:**
+- [x] Created `qutms_sim/urdf/gz_plugins.urdf.xacro`
+  - Contains all 6 custom Gazebo plugins
+  - Comprehensive documentation for each plugin
+  - Documents ECM components read/written
+  - Documents ROS topics/services
+  - Explains plugin architecture and communication
+  
+- [x] Created `qutms_sim/urdf/ros2_control.urdf.xacro`
+  - Contains `<ros2_control>` block with all joint interfaces
+  - Contains gz_ros2_control plugin configuration
+  - Documents state-only interfaces (no command conflicts)
+  - Notes for future physics-based control migration
+  
+- [x] Refactored `qutms_sim/urdf/robot.urdf.xacro`
+  - Reduced from 250 lines to 96 lines (62% reduction)
+  - Now only contains vehicle structure (chassis, wheels, sensors)
+  - Includes modular files via xacro:include
+  - Cleaner, more focused on robot description
+
+**Modular File Structure:**
+```
+qutms_sim/urdf/
+├── robot.urdf.xacro           # Main vehicle structure (96 lines)
+│   ├── Chassis definition
+│   ├── Wheel macros
+│   └── LIDAR sensor
+├── gz_plugins.urdf.xacro      # Custom Gazebo plugins (160 lines)
+│   ├── gazebo_vehicle.so
+│   ├── gazebo_vehicle_control.so
+│   ├── gazebo_ins_odometry.so
+│   ├── gazebo_tf_broadcaster.so
+│   ├── gazebo_cone_detection.so
+│   └── gazebo_sim_reset.so
+│   └── gz_ros2_control plugin
+├── ros2_control.urdf.xacro    # ROS 2 Control config (75 lines)
+│   ├── <ros2_control> block (6 joints, state interfaces)
+└── components/
+    ├── wheels.urdf.xacro      # Wheel definitions
+    └── lidar.urdf.xacro       # LIDAR sensor
+```
+
+**Benefits Achieved:**
+- ✅ Cleaner organization - structure separate from plugins separate from control
+- ✅ Easier maintenance - change plugins without touching robot definition
+- ✅ Better documentation - each file has focused, relevant comments
+- ✅ Reusability - can use different plugin configs for different vehicles
+- ✅ Version control - easier to track changes to specific subsystems
+- ✅ Faster comprehension - developers can understand each subsystem independently
+- ✅ Isolation of concerns - robot geometry vs simulation plugins vs control
+- ✅ Ready for physics-based control migration (only need to modify ros2_control.urdf.xacro)
+
+**Files Modified:**
+- `qutms_sim/urdf/robot.urdf.xacro` (simplified, added includes)
+- `qutms_sim/urdf/gz_plugins.urdf.xacro` (created)
+- `qutms_sim/urdf/ros2_control.urdf.xacro` (created)
+
+**Success Criteria:** ✅ ALL MET
+- ✅ Simulation launches successfully with refactored URDF
+- ✅ All plugins load correctly
+- ✅ No functional changes (plugins work identically)
+- ✅ Code is more maintainable and documented
+- ✅ Easy to add/remove plugins by editing single file
+- ✅ Ready for future enhancements (physics-based control, new sensors)
+
+---
+
+**Sprint 1 Complete! ✅**
+
+All modular plugin architecture work is complete:
+- 6 independent Gazebo plugins
+- ECM-based communication
+- Custom components (VehicleControlInput, VehicleState)
+- ROS 2 Control integration
+- Centralized simulation reset
+- Modular URDF structure
+
+**Next:** Sprint 2 - Physics-based vehicle control with wheel torques
+
+---
+
 **Plugin Architecture Benefits:**
 - ✅ Loadable via URDF configuration (no recompilation)
 - ✅ Easy addition/removal of features
@@ -847,25 +981,25 @@ State vehicle_state = stateComp->Data();
   │       │  │        │  │        │  │      │  │           │ │ation  │
   │       │  │        │  │        │  │      │  │           │ │       │
   └───────┘  └────────┘  └────────┘  └──────┘  └─────┬─────┘ └───────┘
-                                                      │
-                                                      ▼
-                                               ┌─────────────────┐
-                                               │  robot_state_   │
-                                               │   publisher     │
-                                               │  (ROS 2 node)   │
-                                               │                 │
-                                               │ Subscribes:     │
-                                               │ /joint_states   │
-                                               │                 │
-                                               │ Publishes:      │
-                                               │ /tf (joint TFs) │
-                                               └─────────────────┘
+                                                     │
+                                                     ▼
+                                            ┌─────────────────┐
+                                            │  robot_state_   │
+                                            │   publisher     │
+                                            │  (ROS 2 node)   │
+                                            │                 │
+                                            │ Subscribes:     │
+                                            │ /joint_states   │
+                                            │                 │
+                                            │ Publishes:      │
+                                            │ /tf (joint TFs) │
+                                            └─────────────────┘
 
 ROS Topics Published:
   - /joint_states (gz_ros2_control → robot_state_publisher)
-  - /odom (INS odometry plugin)
-  - /odom/ground_truth (INS odometry plugin)
-  - /tf (TF broadcaster: map→odom→base_footprint)
+  - /odometry (INS odometry plugin)
+  - /odometry/ground_truth (INS odometry plugin)
+  - /tf (TF broadcaster: track→odom→base_footprint)
   - /tf (robot_state_publisher: base_footprint→chassis→wheels→steering)
 
 ROS Services:
@@ -874,9 +1008,22 @@ ROS Services:
 
 ---
 
-### Sprint 2: Visualization & Control (High Priority)
+### Sprint 2: Physics-Based Vehicle Control (Ready to Start 🚀)
 
-#### 3.2.1 Vehicle Mesh Visualization Fix
+**Prerequisites:** ✅ ALL COMPLETE
+- ✅ Modular plugin architecture
+- ✅ ROS 2 Control integration (state interfaces)
+- ✅ ECM component communication
+- ✅ Modular URDF structure
+- ✅ VehicleState ECM component
+
+**Focus:** Migrate from kinematic control (WorldPoseCmd) to physics-based control (wheel torques)
+
+This sprint will add command interfaces to gz_ros2_control and implement a tire model in the vehicle dynamics plugin, allowing the physics engine to compute realistic vehicle motion from tire forces.
+
+---
+
+#### 3.2.1 Vehicle Mesh Visualization Fix (Optional - Low Priority)
 - [ ] Debug mesh rendering in GZ Sim GUI
 - [ ] Check URDF mesh file paths
 - [ ] Verify mesh files load in GZ Sim standalone

@@ -10,8 +10,10 @@
   <xacro:arg name="namespace" default="sim"/>
 
   <!-- Imports -->
-  <xacro:include filename="$(find qutms_sim)/urdf/wheels.urdf.xacro"/>
-  <xacro:include filename="$(find qutms_sim)/urdf/lidar.urdf.xacro"/>
+  <xacro:include filename="$(find qutms_sim)/urdf/components/wheels.urdf.xacro"/>
+  <xacro:include filename="$(find qutms_sim)/urdf/components/lidar.urdf.xacro"/>
+  <xacro:include filename="$(find qutms_sim)/urdf/gz_plugins.urdf.xacro"/>
+  <xacro:include filename="$(find qutms_sim)/urdf/ros2_control.urdf.xacro"/>
 
   <!-- Vehicle Elements -->
   <xacro:property name="wheel_diameter" value="0.4064"/> <!-- ALSO FOUND IN wheels.urdf.xacro -->
@@ -91,145 +93,7 @@
 
   <!-- LiDAR -->    
   <xacro:LiDAR parent="chassis" prefix="velodyne" namespace="$(arg namespace)">
-      <origin xyz="1.590 0.0 0.0" rpy="0 0 0"/>
+    <origin xyz="1.590 0.0 0.0" rpy="0 0 0"/>
   </xacro:LiDAR>
-
-
-  <!--  GZ Sim plugins  -->
-  <gazebo>
-    <!-- Vehicle plugin (core dynamics) -->
-    <plugin filename="libgazebo_vehicle.so" name="gazebo_plugins::vehicle_plugins::VehiclePlugin">
-      <ros>
-        <namespace>/$(arg namespace)</namespace>
-      </ros>
-      <vehicle_params>$(find qutms_sim)/config/vehicle_params.yaml</vehicle_params>
-      <update_rate>50.0</update_rate>
-      <steering_lock_time>1.5</steering_lock_time>
-    </plugin>
-  </gazebo>
-
-  <gazebo>
-    <!-- INS Odometry plugin (simulated sensor with noise) -->
-    <plugin filename="libgazebo_ins_odometry.so" name="gazebo_plugins::vehicle_plugins::INSOdometryPlugin">
-      <ros>
-        <namespace>/$(arg namespace)</namespace>
-      </ros>
-      <noise_params>$(find qutms_sim)/config/vehicle_params.yaml</noise_params>
-      <publish_rate>50.0</publish_rate>
-      <odom_frame>track</odom_frame>
-      <base_frame>base_footprint</base_frame>
-      <topic_name>odometry</topic_name>
-      <enable_ground_truth>true</enable_ground_truth>
-      <ground_truth_topic_name>odometry/ground_truth</ground_truth_topic_name>
-    </plugin>
-  </gazebo>
-
-  <gazebo>
-    <!-- TF Broadcaster plugin (publishes vehicle transforms) -->
-    <plugin filename="libgazebo_tf_broadcaster.so" name="gazebo_plugins::vehicle_plugins::TFBroadcasterPlugin">
-      <ros>
-        <namespace>/$(arg namespace)</namespace>
-      </ros>
-      <publish_rate>50.0</publish_rate>
-      <map_frame>track</map_frame>
-      <odom_frame>odom</odom_frame>
-      <base_frame>base_footprint</base_frame>
-      <publish_odom_tf>false</publish_odom_tf>
-    </plugin>
-  </gazebo>
-
-  <gazebo>
-    <!-- Vehicle Control plugin (handles ROS command inputs) -->
-    <plugin filename="libgazebo_vehicle_control.so" name="gazebo_plugins::vehicle_plugins::VehicleControlPlugin">
-      <ros>
-        <namespace>/$(arg namespace)</namespace>
-      </ros>
-      <control_delay>0.035</control_delay>
-      <enable_ackermann>true</enable_ackermann>
-      <enable_twist>true</enable_twist>
-      <ackermann_topic>control/ackermann_cmd</ackermann_topic>
-      <twist_topic>control/twist_cmd</twist_topic>
-    </plugin>
-  </gazebo>
-
-  <gazebo>
-    <!-- Cone detection plugin -->
-    <plugin filename="libgazebo_cone_detection.so" name="gazebo_plugins::vehicle_plugins::ConeDetectionPlugin">
-      <ros>
-        <namespace>/$(arg namespace)</namespace>
-      </ros>
-      <track_update_rate>20.0</track_update_rate>
-      <lidar_update_rate>10.0</lidar_update_rate>
-      <lidar_frame_id>velodyne</lidar_frame_id>
-      <lidar_min_view_distance>1.0</lidar_min_view_distance>
-      <lidar_max_view_distance>20.0</lidar_max_view_distance>
-      <lidar_fov>3.141593</lidar_fov>
-      <lidar_range_noise>0.01</lidar_range_noise>
-      <lidar_bearing_noise>0.001</lidar_bearing_noise>
-      <lidar_detects_colour>false</lidar_detects_colour>
-      <lidar_offset_x>1.59</lidar_offset_x>
-      <lidar_offset_z>0.25</lidar_offset_z>
-      <base_frame>base_footprint</base_frame>
-    </plugin>
-  </gazebo>
-
-  <gazebo>
-    <!-- Simulation Reset plugin (resets vehicle and cones) -->
-    <plugin filename="libgazebo_sim_reset.so" name="gazebo_plugins::vehicle_plugins::SimResetPlugin">
-      <ros>
-        <namespace>/$(arg namespace)</namespace>
-      </ros>
-      <base_frame>base_footprint</base_frame>
-    </plugin>
-  </gazebo>
-
-  <!-- ROS 2 Control Integration - State Interfaces Only -->
-  <!-- Uses gz_ros2_control to read joint states and publish via joint_state_broadcaster -->
-  <!-- No command interfaces = no ownership conflict with kinematic vehicle control -->
-  <ros2_control name="GazeboSimSystem" type="system">
-    <hardware>
-      <plugin>gz_ros2_control/GazeboSimSystem</plugin>
-    </hardware>
-    
-    <!-- Steering joints - state only (vehicle plugin controls via JointPositionReset) -->
-    <joint name="left_steering_hinge_joint">
-      <state_interface name="position" />
-      <state_interface name="velocity" />
-    </joint>
-    <joint name="right_steering_hinge_joint">
-      <state_interface name="position" />
-      <state_interface name="velocity" />
-    </joint>
-    
-    <!-- Wheel joints - state only for TF publishing -->
-    <joint name="front_left_wheel_joint">
-      <state_interface name="position" />
-      <state_interface name="velocity" />
-    </joint>
-    <joint name="front_right_wheel_joint">
-      <state_interface name="position" />
-      <state_interface name="velocity" />
-    </joint>
-    <joint name="rear_left_wheel_joint">
-      <state_interface name="position" />
-      <state_interface name="velocity" />
-    </joint>
-    <joint name="rear_right_wheel_joint">
-      <state_interface name="position" />
-      <state_interface name="velocity" />
-    </joint>
-  </ros2_control>
-
-  <gazebo>
-    <!-- gz_ros2_control plugin - reads joint states from simulation -->
-    <!-- joint_state_broadcaster publishes to /sim/joint_states for robot_state_publisher -->
-    <plugin filename="gz_ros2_control-system" 
-            name="gz_ros2_control::GazeboSimROS2ControlPlugin">
-      <parameters>$(find qutms_sim)/config/ros2_controllers.yaml</parameters>
-      <ros>
-        <namespace>/$(arg namespace)</namespace>
-      </ros>
-    </plugin>
-  </gazebo>
 
 </robot>

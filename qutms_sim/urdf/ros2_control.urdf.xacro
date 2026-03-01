@@ -1,0 +1,56 @@
+<?xml version="1.0"?>
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro">
+
+  <!-- 
+    ROS 2 Control Integration for Joint State Publishing
+    
+    This configuration uses gz_ros2_control to read joint states from Gazebo simulation
+    and publish them via joint_state_broadcaster for robot_state_publisher.
+    
+    STATE-ONLY INTERFACES:
+    - No command interfaces defined = gz_ros2_control only reads, doesn't control
+    - Vehicle dynamics plugin retains control via JointPositionReset (kinematic control)
+    - No ownership conflicts between plugins
+    - All joints automatically published by joint_state_broadcaster
+    
+    Future physics-based control will add command interfaces (effort/velocity) here.
+  -->
+
+  <xacro:arg name="namespace" default="sim"/>
+
+  <!-- ROS 2 Control System Definition -->
+  <ros2_control name="GazeboSimSystem" type="system">
+    <hardware>
+      <plugin>gz_ros2_control/GazeboSimSystem</plugin>
+    </hardware>
+    
+    <!-- Steering joints - state only (vehicle plugin controls via JointPositionReset) -->
+    <joint name="left_steering_hinge_joint">
+      <state_interface name="position" />
+      <state_interface name="velocity" />
+    </joint>
+    <joint name="right_steering_hinge_joint">
+      <state_interface name="position" />
+      <state_interface name="velocity" />
+    </joint>
+    
+    <!-- Wheel joints - state only for TF publishing -->
+    <joint name="front_left_wheel_joint">
+      <state_interface name="position" />
+      <state_interface name="velocity" />
+    </joint>
+    <joint name="front_right_wheel_joint">
+      <state_interface name="position" />
+      <state_interface name="velocity" />
+    </joint>
+    <joint name="rear_left_wheel_joint">
+      <state_interface name="position" />
+      <state_interface name="velocity" />
+    </joint>
+    <joint name="rear_right_wheel_joint">
+      <state_interface name="position" />
+      <state_interface name="velocity" />
+    </joint>
+  </ros2_control>
+
+</robot>
