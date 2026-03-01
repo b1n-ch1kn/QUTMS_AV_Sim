@@ -212,7 +212,9 @@ void VehiclePlugin::update(const gz::sim::UpdateInfo &info,
     if (controlData) {
         input.acceleration = controlData->Data().acceleration;
         input.velocity = controlData->Data().velocity;
-        input.steering = controlData->Data().steering; // Already in radians
+        input.steering = controlData->Data().steering * M_PI / 180.0; // Convert degrees to radians
+        // 90* (max steering angle) = 16* (max wheel angle)
+        input.steering *= (16.0 / 90.0);
     } else {
         // No control data available - use safe defaults
         input.acceleration = -100.0;
