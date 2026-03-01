@@ -1,7 +1,7 @@
 /**:
   controller_manager:
     ros__parameters:
-      update_rate: 50  # Hz - matches our other plugin update rates
+      update_rate: 100  # Hz - matches our other plugin update rates
 
       # Joint State Broadcaster - publishes joint states to /joint_states
       joint_state_broadcaster:
@@ -47,66 +47,33 @@
 
   ackermann_steering_controller:
     ros__parameters:
-      # Vehicle reference frame
-      reference_timeout: 2.0  # Timeout for cmd_vel (s)
+
+      # Our vehicle values
+      wheelbase: 1.580
+      traction_track_width: 1.400
+      steering_track_width: 1.400
+      traction_wheels_radius: 0.2032
+      steering_wheels_radius: 0.2032
       
-      # Steering configuration
-      front_steering: true  # Front-wheel steering
-      rear_steering: false  # No rear steering
+      reference_timeout: 2.0
       
-      # Steering joints
-      steering_joints_names: ['left_steering_hinge_joint', 'right_steering_hinge_joint']
+      # Joint names - MUST match URDF
+      traction_joints_names: ['rear_right_wheel_joint', 'rear_left_wheel_joint']
+      steering_joints_names: ['right_steering_hinge_joint', 'left_steering_hinge_joint']
       
-      # Traction/wheel joints - MUST be exactly 2 for bicycle model (left, right)
-      traction_joints_names: ['rear_left_wheel_joint', 'rear_right_wheel_joint']
-      
-      # Vehicle geometry
-      wheelbase: 1.580  # Distance between front and rear axles (m)
-      steering_track_width: 1.400  # Distance between left and right steering joints (m)
-      traction_track_width: 1.400  # Distance between left and right traction wheels (m)
-      traction_wheels_radius: 0.2032  # Wheel radius (m)
-      steering_wheels_radius: 0.2032  # Front wheel radius (m)
-      
-      # Steering limits
-      front_steering_angle_limit: 0.6  # Max steering angle (rad) ~34 degrees
-      
-      # Control mode - CRITICAL parameters from working example
-      open_loop: false  # Use closed-loop control (NOT open-loop)
-      position_feedback: false  # Don't use position feedback
+      # Critical parameters from demo
+      open_loop: false
       velocity_rolling_window_size: 10
+      position_feedback: false
       
-      # Odometry
+      # Frame IDs
       base_frame_id: base_footprint
-      odom_frame_id: odom
-      enable_odom_tf: false
-      twist_covariance_diagonal: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
-      pose_covariance_diagonal: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+      odom_frame_id: track
+      enable_odom_tf: true
       
-      # PID gains for closed-loop wheel velocity control (converts velocity error to effort)
-      
-      # PID gains for effort/torque control (only used if traction_interface_type: effort)
-      # Formula: torque = Kp * vel_error + Ki * integral(vel_error) + Kd * d(vel_error)/dt
-      # Now that we know direct torque commands work, use aggressive gains
-      traction_controller:
-        kp: 50.0    # High gain - we know 20 Nm works for movement
-        ki: 5.0    # Integral to eliminate steady-state error
-        kd: 2.0    # Derivative for damping
-        antiwindup: true
-        feedforward_gain: 0.0
-        output_limit: 100.0  # Allow plenty of torque - direct commands of 20 Nm worked
-      
-      # Velocity and acceleration limits
-      linear:
-        x:
-          max_velocity: 20.0  # m/s - adjust for your vehicle
-          min_velocity: -5.0  # m/s - reverse
-          max_acceleration: 5.0  # m/s²
-          min_acceleration: -5.0  # m/s²
-      
-      angular:
-        z:
-          max_velocity: 3.0  # rad/s - yaw rate limit
-          max_acceleration: 2.0  # rad/s²
+      # Covariance (demo values)
+      twist_covariance_diagonal: [0.0, 7.0, 14.0, 21.0, 28.0, 35.0]
+      pose_covariance_diagonal: [0.0, 7.0, 14.0, 21.0, 28.0, 35.0]
 
 
   # ============================================================================

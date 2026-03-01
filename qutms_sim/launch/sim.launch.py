@@ -11,6 +11,7 @@ from launch.conditions import IfCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
+from launch_ros.parameter_descriptions import ParameterValue
 
 sim_pkg = get_package_share_directory("qutms_sim")
 
@@ -55,7 +56,7 @@ def load_world(context, *args, **kwargs):
         # Use custom track world
         track = str(get_argument(context, "track") + ".sdf")
         world_path = join(sim_pkg, "worlds", track)
-        gz_args = f"-r -v 1 {world_path}"
+        gz_args = f"-r -v 1 {world_path} -s"
 
     gz_launch_path = join(get_package_share_directory("ros_gz_sim"), "launch", "gz_sim.launch.py")
     
@@ -93,7 +94,7 @@ def load_car(context, *args, **kwargs):
     display_car = get_argument(context, "display_car")
     namespace = get_argument(context, "namespace")
 
-    xacro_path = join(sim_pkg, "urdf", "minimal_test.urdf.xacro")
+    xacro_path = join(sim_pkg, "urdf", "robot.urdf.xacro")
     urdf_path = join(sim_pkg, "urdf", "robot.urdf")
 
     if not isfile(urdf_path):
@@ -108,11 +109,17 @@ def load_car(context, *args, **kwargs):
             "namespace": namespace,
         },
     )
-    out = xacro.open_output(urdf_path)
-    out.write(doc.toprettyxml(indent="  "))
+    
+    # Write and close the URDF file
+    with xacro.open_output(urdf_path) as out:
+        out.write(doc.toprettyxml(indent="  "))
 
+    # Read back the URDF content
     with open(urdf_path, "r") as urdf_file:
-        robot_description = urdf_file.read()
+        robot_description_content = urdf_file.read()
+    
+    # Wrap robot_description as ParameterValue for ROS 2 Jazzy
+    robot_description = ParameterValue(robot_description_content, value_type=str)
 
     spawn_node = TimerAction(period=3.0, actions=[
         Node(
@@ -185,7 +192,7 @@ def load_car(context, *args, **kwargs):
 
     ### ROS2 Control setup ###
 
-    controller_config = join(sim_pkg, "config", "minimal_controllers.yaml")
+    controller_config = join(sim_pkg, "config", "ros2_controllers.yaml")
     
     # Only spawn Ackermann controller and joint_state_broadcaster
     # Based on working gz_ros2_control_demos/ackermann_drive_example
