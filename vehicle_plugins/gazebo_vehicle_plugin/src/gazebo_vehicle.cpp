@@ -3,7 +3,7 @@
 #include <gz/sim/components/AngularVelocity.hh>
 #include <gz/sim/components/AngularVelocityCmd.hh>
 #include <gz/sim/components/Joint.hh>
-#include <gz/sim/components/JointPosition.hh>
+#include <gz/sim/components/JointPositionReset.hh>
 #include <gz/sim/components/LinearVelocity.hh>
 #include <gz/sim/components/LinearVelocityCmd.hh>
 #include <gz/sim/components/Name.hh>
@@ -49,9 +49,11 @@ void VehiclePlugin::Configure(
     initParams(sdf);
 
     // ROS Publishers
-    // RVIZ joint visuals
-    joint_state_pub = node->create_publisher<sensor_msgs::msg::JointState>("joint_states/steering", 1);
-
+    // Publish to /sim/joint_states to match robot_state_publisher subscription
+    // Note: Node is created without namespace, so we use absolute path
+    joint_state_pub = node->create_publisher<sensor_msgs::msg::JointState>("/sim/joint_states", 10);
+    
+    // ROS Services
     reset_vehicle_pos_srv = node->create_service<std_srvs::srv::Trigger>(
         "reset_vehicle",
         std::bind(&VehiclePlugin::resetVehiclePosition, this, std::placeholders::_1, std::placeholders::_2));
@@ -270,31 +272,33 @@ void VehiclePlugin::update(const gz::sim::UpdateInfo &info,
     // Update state
     vehicle_model->updateState(state, output, dt);
 
-    // Set steering joint positions
+    // Command steering joint positions using JointPositionReset
+    // This is the correct component for kinematic control (bypasses physics)
+    // The physics system will update JointPosition state, which gz_ros2_control reads
     if (left_steering_joint != gz::sim::kNullEntity) {
-        auto leftJointPos = ecm.Component<gz::sim::components::JointPosition>(left_steering_joint);
-        if (!leftJointPos) {
+        auto leftJointPosReset = ecm.Component<gz::sim::components::JointPositionReset>(left_steering_joint);
+        if (!leftJointPosReset) {
             ecm.CreateComponent(left_steering_joint, 
-                              gz::sim::components::JointPosition(std::vector<double>{output.steering}));
+                              gz::sim::components::JointPositionReset(std::vector<double>{output.steering}));
         } else {
-            leftJointPos->Data()[0] = output.steering;
+            leftJointPosReset->Data()[0] = output.steering;
         }
     }
 
     if (right_steering_joint != gz::sim::kNullEntity) {
-        auto rightJointPos = ecm.Component<gz::sim::components::JointPosition>(right_steering_joint);
-        if (!rightJointPos) {
+        auto rightJointPosReset = ecm.Component<gz::sim::components::JointPositionReset>(right_steering_joint);
+        if (!rightJointPosReset) {
             ecm.CreateComponent(right_steering_joint, 
-                              gz::sim::components::JointPosition(std::vector<double>{output.steering}));
+                              gz::sim::components::JointPositionReset(std::vector<double>{output.steering}));
         } else {
-            rightJointPos->Data()[0] = output.steering;
+            rightJointPosReset->Data()[0] = output.steering;
         }
     }
 
-    // Convert sim time to ROS time
+    // Publish joint states to standard /joint_states topic
+    // This maintains compatibility with robot_state_publisher and RViz
     rclcpp::Time current_time(std::chrono::duration_cast<std::chrono::nanoseconds>(info.simTime).count());
     
-    // Publish joint states
     sensor_msgs::msg::JointState joint_state;
     joint_state.header.stamp = current_time;
     joint_state.name.push_back("left_steering_hinge_joint");

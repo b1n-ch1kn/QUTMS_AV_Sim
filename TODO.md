@@ -677,21 +677,54 @@ This pattern will be followed for all future sensor plugins (camera, GPS, IMU, e
 
 ---
 
-#### 3.1.4 Joint State Publisher Plugin (Phase 4) - NEXT
+#### 3.1.4 Joint State Publisher (Phase 4) ✅ COMPLETE
 
-**Goal:** Extract joint state publishing for visualization
+**Goal:** Publish joint states to standard `/joint_states` topic
 
-- [ ] Create `gazebo_joint_state_publisher_plugin`
-- [ ] Implement joint state publishing
-  - [ ] Read joint positions from ECM
-  - [ ] Publish to `/sim/joint_states/steering`
-  - [ ] Support configurable joint list
-- [ ] Remove joint state publishing from vehicle plugin
-- [ ] Test with RViz
-  - [ ] Verify steering visualization works
-  - [ ] Check update rate
+**Approach Decision:**
+Initially attempted gz_ros2_control with `joint_state_broadcaster`, but discovered a fundamental conflict: gz_ros2_control's `GazeboSimSystem` takes ownership of joints it manages, which conflicts with our kinematic control approach (using `JointPositionReset` to directly set joint positions).
 
-**After Completion:** Vehicle plugin will be pure dynamics simulation with no publishing responsibilities.
+**Final Implementation:**
+- [x] Direct publishing from vehicle plugin to `/sim/joint_states` topic
+- [x] Uses absolute topic path (plugin node created without namespace)
+- [x] Matches robot_state_publisher subscription in `/sim` namespace
+- [x] Uses actual steering angle from vehicle model (`output.steering`)
+- [x] Includes both left and right steering hinge joints
+- [x] Timestamp synchronized with simulation time
+
+**Why Not gz_ros2_control (Yet):**
+- gz_ros2_control's `GazeboSimSystem` expects to control joints via command interfaces
+- Our current approach uses kinematic control (bypassing physics)
+- Mixing both approaches causes joint ownership conflicts
+- **Future**: When migrating to physics-based control, we'll use gz_ros2_control properly
+
+**Benefits of This Approach:**
+- ✅ Simple and direct - no additional dependencies
+- ✅ Publishes to standard `/joint_states` topic
+- ✅ Compatible with existing robot_state_publisher workflow
+- ✅ No conflicts with kinematic vehicle control
+- ✅ Easy to replace when migrating to ros2_control
+
+**Files Modified:**
+- `vehicle_plugins/gazebo_vehicle_plugin/src/gazebo_vehicle.cpp`: Added joint state publishing
+- `vehicle_plugins/gazebo_vehicle_plugin/include/gazebo_vehicle_plugin/gazebo_vehicle.hpp`: Added publisher
+- `qutms_sim/urdf/robot.urdf.xacro`: Added placeholder comments for future ros2_control integration
+
+**Success Criteria:** ✅ ALL MET
+- ✅ Joint states published on standard `/joint_states` topic
+- ✅ Values update correctly with steering angle
+- ✅ Compatible with RViz and robot_state_publisher
+- ✅ Clean, maintainable code
+- ✅ Ready for future ros2_control migration
+- ✅ Publishes to namespaced topic (`/sim/joint_states`) for robot_state_publisher
+- ✅ TF transforms update in Foxglove/RViz when steering
+
+**Integration with robot_state_publisher:**
+- Vehicle plugin publishes to `/sim/joint_states` (absolute topic path)
+- Plugin node created without namespace, so absolute path required
+- `robot_state_publisher` (in `/sim` namespace) subscribes to `/sim/joint_states`
+- `robot_state_publisher` publishes TF transforms for all joints (steering, wheels, chassis)
+- Joint TFs update correctly in visualization tools when steering changes
 
 ---
 
@@ -703,34 +736,60 @@ This pattern will be followed for all future sensor plugins (camera, GPS, IMU, e
 - ✅ Support multiple vehicle configurations
 - ✅ ECM component-based communication between plugins
 - ✅ Per-plugin configuration via SDF parameters
+- ✅ Standard `/joint_states` topic for RViz integration
 
 **Current Plugin Architecture:**
 ```
-┌─────────────────────────────────────────────────────┐
-│              GZ Sim Entity (Vehicle)                │
-│                                                     │
-│  ECM Components:                                    │
-│  - Pose, LinearVelocity, AngularVelocity (state)   │
-│  - WorldPoseCmd, World*VelocityCmd (commands)      │
-│  - VehicleControlInput (custom component)          │
-└─────────────────────────────────────────────────────┘
-         ▲              ▲              ▲
-         │              │              │
-    ┌────┴────┐   ┌─────┴─────┐  ┌────┴────┐
-    │ Vehicle │   │ Vehicle   │  │   INS   │
-    │Dynamics │   │ Control   │  │Odometry │
-    │ Plugin  │   │  Plugin   │  │ Plugin  │
-    │         │   │           │  │         │
-    │ Writes: │   │ Writes:   │  │ Reads:  │
-    │ *Cmd    │   │ Control   │  │ Pose    │
-    │ State   │   │ Input     │  │ Vel     │
-    └─────────┘   └───────────┘  └─────────┘
-         │              │              │
-         └──────┬───────┴──────┬───────┘
-                │              │
-         No ROS Topics    ROS Topics:
-         (Pure GZ Sim)    /sim/odometry
-                          /sim/odometry/ground_truth
+┌─────────────────────────────────────────────────────────────┐
+│                GZ Sim Entity (Vehicle)                      │
+│                                                             │
+│  ECM Components:                                            │
+│  - Pose, LinearVelocity, AngularVelocity (state)            │
+│  - WorldPoseCmd, World*VelocityCmd (commands)               │
+│  - JointPositionReset (steering command)                    │
+│  - VehicleControlInput (custom component)                   │
+└─────────────────────────────────────────────────────────────┘
+      ▲          ▲           ▲           ▲            
+      │          │           │           │            
+  ┌───┴───┐  ┌───┴────┐  ┌───┴────┐  ┌──┴───┐  
+  │Vehicle│  │Vehicle │  │  INS   │  │  TF  │  
+  │Dynam- │  │Control │  │Odom.   │  │Broad-│  
+  │ics    │  │ Plugin │  │ Plugin │  │caster│ 
+  │Plugin │  │        │  │        │  │Plugin│  
+  │       │  │        │  │        │  │      │  
+  │Writes:│  │Writes: │  │ Reads: │  │Reads:│  
+  │*Cmd   │  │Control │  │ Pose   │  │Pose  │  
+  │State  │  │ Input  │  │ Vel    │  │      │  
+  │Joint  │  │        │  │        │  │      │  
+  │Reset  │  │        │  │        │  │      │  
+  │       │  │        │  │        │  │      │
+  │Publsh:│  │        │  │Publsh: │  │Publsh│  
+  │/sim/  │  │        │  │/sim/   │  │/tf   │    
+  │joint_ │  │        │  │odom    │  │      │
+  │states │  │        │  │/odom/gt│  │      │
+  └───┬───┘  └────────┘  └────────┘  └──────┘  
+      │          
+      │          
+      ▼          
+┌─────────────────┐
+│  robot_state_   │
+│   publisher     │
+│  (ROS 2 node)   │
+│                 │
+│ Subscribes:     │
+│ /sim/joint_     │
+│ states          │
+│                 │
+│ Publishes:      │
+│ /tf (joint TFs) │
+└─────────────────┘
+
+ROS Topics Published:
+  - /sim/joint_states (vehicle plugin → robot_state_publisher)
+  - /sim/odometry
+  - /sim/odometry/ground_truth
+  - /tf (TF broadcaster: map→odom→base_footprint)
+  - /tf (robot_state_publisher: base_footprint→chassis→wheels→steering)
 ```
 
 ---

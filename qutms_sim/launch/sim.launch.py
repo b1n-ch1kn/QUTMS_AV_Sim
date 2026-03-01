@@ -131,22 +131,8 @@ def spawn_car(context, *args, **kwargs):
                 ),
             ],
         ),
-        Node(
-            name="joint_state_publisher",
-            package="joint_state_publisher",
-            executable="joint_state_publisher",
-            namespace=namespace,
-            output="screen",
-            parameters=[
-                {
-                    "robot_description": robot_description,
-                    "rate": 200,
-                    "use_sim_time": LaunchConfiguration("use_sim_time"),
-                    "source_list": ["joint_states/steering"],
-                }
-            ],
-            arguments=[urdf_path],
-        ),
+        # robot_state_publisher subscribes to joint_states and publishes TF transforms
+        # It automatically uses the namespace, so it listens to /sim/joint_states
         Node(
             name="robot_state_publisher",
             package="robot_state_publisher",
