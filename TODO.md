@@ -141,7 +141,7 @@
 - [x] Configured for GZ Sim sensor system
 
 **Result:**
-- LIDAR publishes to /scan (GZ topic) and /sim/scan (ROS topic via bridge)
+- LIDAR publishes to /scan (GZ topic) and /scan (ROS topic via bridge)
 - Proper frame IDs for TF integration
 - 10Hz update rate maintained
 
@@ -383,7 +383,7 @@ nav_msgs::msg::Odometry stateToOdom(const State &state, const rclcpp::Time &stam
 
 **Result:**
 - LIDAR publishes to /scan (Gazebo topic)
-- Bridge forwards to /sim/scan (ROS topic)
+- Bridge forwards to /scan (ROS topic)
 - Data visible in both GZ and ROS ecosystems
 
 ---
@@ -396,16 +396,16 @@ nav_msgs::msg::Odometry stateToOdom(const State &state, const rclcpp::Time &stam
 - ✅ Bicycle model physics simulation (kinematic)
 - ✅ Pose/velocity commanded via ECM components (WorldPoseCmd, WorldLinearVelocityCmd, WorldAngularVelocityCmd)
 - ✅ State components updated for sensor plugin reads (Pose, LinearVelocity, AngularVelocity)
-- ✅ Ackermann command control (`/sim/control/ackermann_cmd`) - via separate control plugin
-- ✅ Twist command control (`/sim/control/twist_cmd`) - via separate control plugin
+- ✅ Ackermann command control (`/control/ackermann_cmd`) - via separate control plugin
+- ✅ Twist command control (`/control/twist_cmd`) - via separate control plugin
 - ✅ Steering rate limiting
 - ✅ Velocity control with acceleration limits
-- ✅ Reset service (`/sim/reset_vehicle_pos`)
+- ✅ Reset service (`/reset_vehicle_pos`)
 - ✅ Modular plugin architecture (dynamics, control, sensors separated)
 
 **Odometry & State Estimation:**
-- ✅ Ground truth odometry (`/sim/odom/ground_truth`) - via INS odometry plugin
-- ✅ Noisy odometry (`/sim/odom`) - via INS odometry plugin
+- ✅ Ground truth odometry (`/odom/ground_truth`) - via INS odometry plugin
+- ✅ Noisy odometry (`/odom`) - via INS odometry plugin
 - ✅ Motion noise model applied (Gaussian noise on position/velocity)
 - ✅ Update rate: 50 Hz (vehicle model)
 - ✅ Publish rate: 50 Hz (INS odometry plugin)
@@ -422,7 +422,7 @@ nav_msgs::msg::Odometry stateToOdom(const State &state, const rclcpp::Time &stam
 
 **Sensors:**
 - ✅ LIDAR sensor (gpu_lidar)
-  - Publishes to /scan (GZ) and /sim/scan (ROS)
+  - Publishes to /scan (GZ) and /scan (ROS)
   - 10Hz update rate
   - Proper frame ID configuration
   - Visualizable in GZ Sim
@@ -553,7 +553,7 @@ Plugins will be refactored into a modular architecture where each plugin is a st
   - [x] Read vehicle velocity from ECM `LinearVelocity`/`AngularVelocity` components
   - [x] Load noise parameters from SDF
   - [x] Apply noise model to pose/velocity
-  - [x] Publish to `/sim/odometry` ROS topic
+  - [x] Publish to `/odometry` ROS topic
   - [x] Register plugin with GZ_ADD_PLUGIN
 - [x] **Ground truth capability added**
   - [x] `<enable_ground_truth>` SDF parameter
@@ -616,8 +616,8 @@ This pattern will be followed for all future sensor plugins (camera, GPS, IMU, e
   - [x] Header and source files
   - [x] CMakeLists.txt
 - [x] Implement control plugin
-  - [x] Subscribe to `/sim/control/ackermann_cmd`
-  - [x] Subscribe to `/sim/control/twist_cmd`
+  - [x] Subscribe to `/control/ackermann_cmd`
+  - [x] Subscribe to `/control/twist_cmd`
   - [x] Convert commands to vehicle inputs
   - [x] Write desired inputs to ECM custom component
   - [x] Handle command timeouts
@@ -692,7 +692,7 @@ This pattern will be followed for all future sensor plugins (camera, GPS, IMU, e
   
 - [x] Added gz_ros2_control plugin to URDF
   - Loads controller config via xacro argument
-  - Publishes to `/sim/joint_states` (namespaced)
+  - Publishes to `/joint_states` (namespaced)
   
 - [x] Added spawner node in launch file
   - Loads and activates joint_state_broadcaster
@@ -712,7 +712,7 @@ Vehicle Plugin (JointPositionReset)
   → GZ Physics → ECM (JointPosition) 
     → gz_ros2_control (reads state) 
       → joint_state_broadcaster 
-        → /sim/joint_states 
+        → /joint_states 
           → robot_state_publisher 
             → TF transforms
 ```
@@ -732,6 +732,75 @@ Vehicle Plugin (JointPositionReset)
 
 ---
 
+#### 3.1.5 Simulation Reset Plugin (Phase 5) ✅ COMPLETE
+
+**Goal:** Create centralized simulation reset plugin to reset both vehicle and cones to initial positions
+
+**Implementation:**
+- [x] Created `gazebo_sim_reset_plugin` directory structure
+  - `include/gazebo_sim_reset_plugin/sim_reset.hpp`
+  - `src/sim_reset.cpp`
+  - `CMakeLists.txt`
+  
+- [x] Implemented reset functionality
+  - Reset service: `/reset_simulation` (std_srvs/srv/Trigger)
+  - Vehicle reset: Resets to initial spawn pose with zero velocity
+  - Cone reset: All cones return to original track positions
+  
+- [x] Created VehicleState ECM component architecture
+  - `VehicleState.hh` component definition (wraps State struct)
+  - Stores complete vehicle dynamics state (13 fields: x, y, z, yaw, velocities, rotations, accelerations)
+  - Single source of truth for vehicle state across all plugins
+  - Enables future modular vehicle dynamics implementations
+  
+- [x] Reset implementation details
+  - Reset plugin modifies VehicleState ECM component with initial conditions
+  - Also sets WorldPoseCmd, WorldLinearVelocityCmd, WorldAngularVelocityCmd for immediate physics update
+  - Cone positions reset via PoseCmd components
+  - All velocities zeroed on reset
+  
+- [x] Removed individual reset services
+  - Deleted `/reset_vehicle_pos` from vehicle plugin
+  - Deleted `/reset_cone_pos` from cone detection plugin
+  - Centralized reset logic in single plugin
+
+**ECM Component Pattern - VehicleState:**
+```cpp
+// Component definition
+using VehicleState = Component<gazebo_plugins::vehicle_plugins::State, 
+                               class VehicleStateTag>;
+
+// Vehicle plugin creates/updates state
+ecm.CreateComponent(_entity, gz::sim::components::VehicleState(state));
+*stateComp = gz::sim::components::VehicleState(updated_state);
+
+// Other plugins can read vehicle state
+auto stateComp = ecm.Component<gz::sim::components::VehicleState>(_entity);
+State vehicle_state = stateComp->Data();
+```
+
+**Files Created:**
+- `vehicle_plugins/gazebo_sim_reset_plugin/include/gazebo_sim_reset_plugin/sim_reset.hpp`
+- `vehicle_plugins/gazebo_sim_reset_plugin/src/sim_reset.cpp`
+- `vehicle_plugins/gazebo_sim_reset_plugin/CMakeLists.txt`
+- `vehicle_plugins/gazebo_vehicle_plugin/include/gazebo_vehicle_plugin/VehicleState.hh`
+
+**Files Modified:**
+- `vehicle_plugins/CMakeLists.txt` (added sim_reset_plugin subdirectory)
+- `qutms_sim/urdf/robot.urdf.xacro` (added sim_reset_plugin configuration)
+- `vehicle_plugins/gazebo_vehicle_plugin/*` (integrated VehicleState ECM component, removed reset service)
+- `vehicle_plugins/gazebo_cone_detection_plugin/*` (removed reset service)
+
+**Success Criteria:** ✅ ALL MET
+- ✅ Single reset service controls entire simulation
+- ✅ Vehicle returns to spawn position with zero velocity
+- ✅ All cones return to original track positions
+- ✅ VehicleState ECM component enables modular vehicle dynamics
+- ✅ Clean separation: reset logic independent from vehicle/cone plugins
+- ✅ Foundation for future multi-vehicle simulations
+
+---
+
 **Plugin Architecture Benefits:**
 - ✅ Loadable via URDF configuration (no recompilation)
 - ✅ Easy addition/removal of features
@@ -741,6 +810,7 @@ Vehicle Plugin (JointPositionReset)
 - ✅ ECM component-based communication between plugins
 - ✅ Per-plugin configuration via SDF parameters
 - ✅ Standard ROS 2 Control integration for joint states
+- ✅ Centralized simulation management (reset, state)
 
 **Current Plugin Architecture:**
 ```
@@ -753,26 +823,30 @@ Vehicle Plugin (JointPositionReset)
 │  - JointPositionReset (steering command)                    │
 │  - JointPosition (joint state - read by gz_ros2_control)    │
 │  - VehicleControlInput (custom component)                   │
+│  - VehicleState (custom component - full dynamics state)    │
 └─────────────────────────────────────────────────────────────┘
-      ▲          ▲           ▲           ▲            ▲
-      │          │           │           │            │
-  ┌───┴───┐  ┌───┴────┐  ┌───┴────┐  ┌──┴───┐  ┌────┴──────┐
-  │Vehicle│  │Vehicle │  │  INS   │  │  TF  │  │gz_ros2_   │
-  │Dynam- │  │Control │  │Odom.   │  │Broad-│  │control +  │
-  │ics    │  │ Plugin │  │ Plugin │  │caster│  │joint_state│
-  │Plugin │  │        │  │        │  │Plugin│  │broadcaster│
-  │       │  │        │  │        │  │      │  │           │
-  │Writes:│  │Writes: │  │ Reads: │  │Reads:│  │Reads:     │
-  │*Cmd   │  │Control │  │ Pose   │  │Pose  │  │Joint      │
-  │State  │  │ Input  │  │ Vel    │  │      │  │Position   │
-  │Joint  │  │        │  │        │  │      │  │           │
-  │Reset  │  │        │  │        │  │      │  │           │
-  │       │  │        │  │        │  │      │  │           │
-  │Publsh:│  │        │  │Publsh: │  │Publsh│  │Publsh:    │
-  │(none) │  │        │  │/sim/   │  │/tf   │  │/sim/      │
-  │       │  │        │  │odom    │  │      │  │joint_     │
-  │       │  │        │  │/odom/gt│  │      │  │states     │
-  └───────┘  └────────┘  └────────┘  └──────┘  └─────┬─────┘
+      ▲          ▲           ▲          ▲           ▲           ▲
+      │          │           │          │           │           │
+  ┌───┴───┐  ┌───┴────┐  ┌───┴────┐  ┌──┴───┐  ┌────┴──────┐ ┌──┴────┐
+  │Vehicle│  │Vehicle │  │  INS   │  │  TF  │  │gz_ros2_   │ │ Sim   │
+  │Dynam- │  │Control │  │Odom.   │  │Broad-│  │control +  │ │ Reset │
+  │ics    │  │ Plugin │  │ Plugin │  │caster│  │joint_state│ │Plugin │
+  │Plugin │  │        │  │        │  │Plugin│  │broadcaster│ │       │
+  │       │  │        │  │        │  │      │  │           │ │       │
+  │Writes:│  │Writes: │  │ Reads: │  │Reads:│  │Reads:     │ │Writes:│
+  │*Cmd   │  │Control │  │ Pose   │  │Pose  │  │Joint      │ │Vehicle│
+  │State  │  │ Input  │  │ Vel    │  │      │  │Position   │ │State  │
+  │Joint  │  │        │  │        │  │      │  │           │ │*Cmd   │
+  │Reset  │  │        │  │        │  │      │  │           │ │(reset)│
+  │Vehicle│  │        │  │        │  │      │  │           │ │       │
+  │State  │  │        │  │        │  │      │  │           │ │       │
+  │       │  │        │  │        │  │      │  │           │ │       │
+  │Publsh:│  │        │  │Publsh: │  │Publsh│  │Publsh:    │ │Servce:│
+  │(none) │  │        │  │/odom   │  │/tf   │  │/joint_    │ │/reset_│
+  │       │  │        │  │/odom/gt│  │      │  │states     │ │simul- │
+  │       │  │        │  │        │  │      │  │           │ │ation  │
+  │       │  │        │  │        │  │      │  │           │ │       │
+  └───────┘  └────────┘  └────────┘  └──────┘  └─────┬─────┘ └───────┘
                                                       │
                                                       ▼
                                                ┌─────────────────┐
@@ -781,19 +855,21 @@ Vehicle Plugin (JointPositionReset)
                                                │  (ROS 2 node)   │
                                                │                 │
                                                │ Subscribes:     │
-                                               │ /sim/joint_     │
-                                               │ states          │
+                                               │ /joint_states   │
                                                │                 │
                                                │ Publishes:      │
                                                │ /tf (joint TFs) │
                                                └─────────────────┘
 
 ROS Topics Published:
-  - /sim/joint_states (gz_ros2_control → robot_state_publisher)
-  - /sim/odom (INS odometry plugin)
-  - /sim/odom/ground_truth (INS odometry plugin)
+  - /joint_states (gz_ros2_control → robot_state_publisher)
+  - /odom (INS odometry plugin)
+  - /odom/ground_truth (INS odometry plugin)
   - /tf (TF broadcaster: map→odom→base_footprint)
   - /tf (robot_state_publisher: base_footprint→chassis→wheels→steering)
+
+ROS Services:
+  - /reset_simulation (Sim reset plugin - resets vehicle & cones)
 ```
 
 ---
@@ -942,9 +1018,9 @@ ROS Topics Published:
   - [ ] Bypass actual image processing for testing
 
 **Expected Topics:**
-- `/sim/camera/image_raw`
-- `/sim/camera/camera_info`
-- `/sim/detections/camera` (if detection plugin added)
+- `/camera/image_raw`
+- `/camera/camera_info`
+- `/detections/camera` (if detection plugin added)
 
 ---
 
@@ -973,8 +1049,8 @@ ROS Topics Published:
   - [ ] Temperature effects (optional)
 
 **Expected Topics:**
-- `/sim/imu`
-- `/sim/imu/ground_truth` (without noise)
+- `/imu`
+- `/imu/ground_truth` (without noise)
 
 ---
 
@@ -1003,8 +1079,8 @@ ROS Topics Published:
   - [ ] Urban canyon effects
 
 **Expected Topics:**
-- `/sim/gps/fix`
-- `/sim/gps/ground_truth`
+- `/gps/fix`
+- `/gps/ground_truth`
 
 ---
 
@@ -1036,8 +1112,8 @@ ROS Topics Published:
   - [ ] GPS denial scenarios
 
 **Expected Topics:**
-- `/sim/odometry/ins`
-- `/sim/odometry/ins_ground_truth`
+- `/odometry/ins`
+- `/odometry/ins_ground_truth`
 
 **Libraries to Consider:**
 - `robot_localization` package
