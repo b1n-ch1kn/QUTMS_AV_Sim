@@ -51,6 +51,9 @@
 #include "gazebo_vehicle_plugin/vehicle_model_bike.hpp"
 #include "gazebo_vehicle_plugin/vehicle_state.hpp"
 
+// Control component (from control plugin)
+#include "gazebo_vehicle_control_plugin/vehicle_control_component.hpp"
+
 namespace gazebo_plugins {
 namespace vehicle_plugins {
 
@@ -77,8 +80,6 @@ class VehiclePlugin : public gz::sim::System,
                               std::shared_ptr<std_srvs::srv::Trigger::Response> response);
     void setModelState(gz::sim::EntityComponentManager &ecm);
     void update(const gz::sim::UpdateInfo &info, gz::sim::EntityComponentManager &ecm);
-    void onAckermannCmd(const ackermann_msgs::msg::AckermannDriveStamped::SharedPtr msg);
-    void onTwistCmd(const geometry_msgs::msg::Twist::SharedPtr msg);
 
     nav_msgs::msg::Odometry stateToOdom(const State &state, const rclcpp::Time &stamp);
     State odomToState(const nav_msgs::msg::Odometry &odom);
@@ -107,10 +108,6 @@ class VehiclePlugin : public gz::sim::System,
     // ROS Publishers
     rclcpp::Publisher<sensor_msgs::msg::JointState>::SharedPtr joint_state_pub;
 
-    // ROS Subscriptions
-    rclcpp::Subscription<ackermann_msgs::msg::AckermannDriveStamped>::SharedPtr ackermann_cmd_sub;
-    rclcpp::Subscription<geometry_msgs::msg::Twist>::SharedPtr twist_cmd_sub;
-
     // ROS Services
     rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr reset_vehicle_pos_srv;
 
@@ -118,9 +115,6 @@ class VehiclePlugin : public gz::sim::System,
     gz::sim::Entity left_steering_joint;
     gz::sim::Entity right_steering_joint;
 
-    // Command queue for control delays
-    ackermann_msgs::msg::AckermannDriveStamped last_cmd;
-    double control_delay;
     // Steering rate limit variables
     double max_steering_rate, steering_lock_time;
     

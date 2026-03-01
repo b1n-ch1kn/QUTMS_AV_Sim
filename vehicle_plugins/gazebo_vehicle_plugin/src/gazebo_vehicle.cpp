@@ -49,12 +49,6 @@ void VehiclePlugin::Configure(
     // RVIZ joint visuals
     joint_state_pub = node->create_publisher<sensor_msgs::msg::JointState>("joint_states/steering", 1);
 
-    // ROS Subscriptions
-    ackermann_cmd_sub = node->create_subscription<ackermann_msgs::msg::AckermannDriveStamped>(
-        "control/ackermann_cmd", 1, std::bind(&VehiclePlugin::onAckermannCmd, this, std::placeholders::_1));
-    twist_cmd_sub = node->create_subscription<geometry_msgs::msg::Twist>(
-        "control/twist_cmd", 1, std::bind(&VehiclePlugin::onTwistCmd, this, std::placeholders::_1));
-
     reset_vehicle_pos_srv = node->create_service<std_srvs::srv::Trigger>(
         "reset_vehicle",
         std::bind(&VehiclePlugin::resetVehiclePosition, this, std::placeholders::_1, std::placeholders::_2));
@@ -64,13 +58,7 @@ void VehiclePlugin::Configure(
 
     // Initialize times
     last_sim_time = std::chrono::steady_clock::duration::zero();
-    last_cmd_time = std::chrono::steady_clock::duration::zero();
     last_published_time = std::chrono::steady_clock::duration::zero();
-
-    // Initialize command
-    last_cmd.drive.steering_angle = 0;
-    last_cmd.drive.acceleration = -100;
-    last_cmd.drive.speed = 0;
 
     RCLCPP_INFO(node->get_logger(), "GZ Sim VehiclePlugin Configured");
 }
@@ -92,7 +80,6 @@ void VehiclePlugin::initParams(const std::shared_ptr<const sdf::Element> &sdf) {
     publish_rate = sdf->Get<double>("publish_rate", 50.0).first;
     odom_frame = sdf->Get<std::string>("odom_frame", "track").first;
     base_frame = sdf->Get<std::string>("base_frame", "base_footprint").first;
-    control_delay = sdf->Get<double>("control_delay", 0.035).first;
     steering_lock_time = sdf->Get<double>("steering_lock_time", 1.5).first;
     
     RCLCPP_INFO(node->get_logger(), "Vehicle plugin params loaded: update_rate=%.1f, publish_rate=%.1f", 
@@ -178,10 +165,10 @@ bool VehiclePlugin::resetVehiclePosition(
     state_odom.twist.twist.angular.y = 0.0;
     state_odom.twist.twist.angular.z = 0.0;
 
-    last_cmd.drive.steering_angle = 0;
-    last_cmd.drive.speed = -1;
-
     state = odomToState(state_odom);
+    
+    // Note: Control commands are now handled by the vehicle_control_plugin
+    // Vehicle will stop naturally when no commands are received
 
     // NOTE: In GZ Sim, setting pose/velocity requires WorldPoseCmd and related components
     // This will be handled in the update loop
@@ -276,11 +263,18 @@ void VehiclePlugin::update(const gz::sim::UpdateInfo &info,
 
     last_sim_time = info.simTime;
 
-    input.acceleration = last_cmd.drive.acceleration;
-    input.velocity = last_cmd.drive.speed;
-    input.steering = last_cmd.drive.steering_angle * M_PI / 180.0; // Convert to radians
-    // 90* (max steering angle) = 16* (max wheel angle)
-    input.steering *= (16.0 / 90.0);
+    // Read control inputs from ECM (provided by vehicle_control_plugin)
+    auto controlData = ecm.Component<gz::sim::components::VehicleControlInput>(_entity);
+    if (controlData) {
+        input.acceleration = controlData->Data().acceleration;
+        input.velocity = controlData->Data().velocity;
+        input.steering = controlData->Data().steering; // Already in radians
+    } else {
+        // No control data available - use safe defaults
+        input.acceleration = -100.0;
+        input.velocity = 0.0;
+        input.steering = 0.0;
+    }
 
     double current_speed = std::sqrt(std::pow(state_odom.twist.twist.linear.x, 2) + 
                                     std::pow(state_odom.twist.twist.linear.y, 2));
@@ -356,45 +350,7 @@ void VehiclePlugin::update(const gz::sim::UpdateInfo &info,
 
 }
 
-void VehiclePlugin::onAckermannCmd(const ackermann_msgs::msg::AckermannDriveStamped::SharedPtr msg) {
-    auto time_since_cmd_duration = last_sim_time - last_cmd_time;
-    double time_since_cmd = std::chrono::duration<double>(time_since_cmd_duration).count();
-    
-    RCLCPP_DEBUG(node->get_logger(), "Time since last cmd: %f", time_since_cmd);
-    
-    // Simple control delay - just wait if needed
-    if (time_since_cmd < control_delay) {
-        return;
-    }
-    
-    last_cmd.drive.acceleration = msg->drive.acceleration;
-    last_cmd.drive.speed = msg->drive.speed;
-    last_cmd.drive.steering_angle = msg->drive.steering_angle;
-    last_cmd_time = last_sim_time;
-}
 
-void VehiclePlugin::onTwistCmd(const geometry_msgs::msg::Twist::SharedPtr msg) {
-    auto time_since_cmd_duration = last_sim_time - last_cmd_time;
-    double time_since_cmd = std::chrono::duration<double>(time_since_cmd_duration).count();
-    
-    RCLCPP_DEBUG(node->get_logger(), "Time since last cmd: %f", time_since_cmd);
-    
-    if (time_since_cmd < control_delay) {
-        return;
-    }
-    
-    if (msg->linear.x > 0) {
-        last_cmd.drive.speed = msg->linear.x;
-    } else if (msg->linear.x < 0) {
-        last_cmd.drive.speed = -1;
-        last_cmd.drive.steering_angle = 0;
-    }
-    last_cmd.drive.steering_angle += msg->angular.z;
-
-    RCLCPP_INFO(node->get_logger(), "Steering Angle: %f", last_cmd.drive.steering_angle);
-
-    last_cmd_time = last_sim_time;
-}
 
 }  // namespace vehicle_plugins
 }  // namespace gazebo_plugins

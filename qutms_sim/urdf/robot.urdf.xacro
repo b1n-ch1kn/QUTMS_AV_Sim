@@ -97,7 +97,7 @@
 
   <!--  GZ Sim plugins  -->
   <gazebo>
-    <!-- Vehicle plugin (core dynamics + ground truth) -->
+    <!-- Vehicle plugin (core dynamics) -->
     <plugin filename="libgazebo_vehicle.so" name="gazebo_plugins::vehicle_plugins::VehiclePlugin">
       <ros>
         <namespace>/$(arg namespace)</namespace>
@@ -108,7 +108,6 @@
       <map_frame>track</map_frame>
       <odom_frame>track</odom_frame>
       <base_frame>base_footprint</base_frame>
-      <control_delay>0.035</control_delay>
       <steering_lock_time>1.5</steering_lock_time>
     </plugin>
   </gazebo>
@@ -140,6 +139,20 @@
       <odom_frame>odom</odom_frame>
       <base_frame>base_footprint</base_frame>
       <publish_odom_tf>false</publish_odom_tf>
+    </plugin>
+  </gazebo>
+
+  <gazebo>
+    <!-- Vehicle Control plugin (handles ROS command inputs) -->
+    <plugin filename="libgazebo_vehicle_control.so" name="gazebo_plugins::vehicle_plugins::VehicleControlPlugin">
+      <ros>
+        <namespace>/$(arg namespace)</namespace>
+      </ros>
+      <control_delay>0.035</control_delay>
+      <enable_ackermann>true</enable_ackermann>
+      <enable_twist>true</enable_twist>
+      <ackermann_topic>control/ackermann_cmd</ackermann_topic>
+      <twist_topic>control/twist_cmd</twist_topic>
     </plugin>
   </gazebo>
 

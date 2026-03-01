@@ -6,6 +6,7 @@ ament_auto_add_library(gazebo_vehicle SHARED
 
 target_include_directories(gazebo_vehicle PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/../gazebo_vehicle_control_plugin/include>
   $<INSTALL_INTERFACE:include>
 )
 
