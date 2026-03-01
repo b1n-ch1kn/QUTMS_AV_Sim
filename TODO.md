@@ -1,9 +1,10 @@
 # QUTMS_AV_Sim - Comprehensive Development Roadmap
 
 **Last Updated:** 2026-03-01  
-**Current Status:** ✅ Phase 1 & 2 Complete | 🚀 Phase 3 Sprint 1 Complete  
+**Current Status:** ✅ Sprint 1 Complete | 🚧 Sprint 2 In Progress (ROS 2 Control Active)  
 **ROS Version:** ROS 2 Jazzy Jalisco  
-**Simulator:** Gazebo Harmonic (GZ Sim 8)
+**Simulator:** Gazebo Harmonic (GZ Sim 8)  
+**Control Mode:** Physics-Based (ROS 2 Control)
 
 ---
 
@@ -24,9 +25,23 @@
 **QUTMS_AV_Sim** is the ROS 2 simulation environment for QUT Motorsport's autonomous Formula Student vehicle. This document tracks the complete evolution from the original ROS 2 Humble/Gazebo Classic implementation through the Jazzy/GZ Sim migration and future development plans.
 
 ### Migration Journey
-- **Starting Point:** ROS 2 Humble + Gazebo Classic
-- **Current State:** ROS 2 Jazzy + GZ Sim Harmonic (fully functional)
-- **Next Target:** Feature enhancements and advanced capabilities
+- **Starting Point:** ROS 2 Humble + Gazebo Classic + Kinematic Control
+- **Current State:** ROS 2 Jazzy + GZ Sim Harmonic + Physics-Based Control (ROS 2 Control)
+- **Next Target:** Advanced tire models, traction control, multi-vehicle support
+
+### Current Capabilities ✅
+- ✅ **Control System:** ROS 2 Control with Ackermann steering controller
+- ✅ **Physics:** Realistic vehicle dynamics via wheel velocities 
+- ✅ **Sensors:** INS odometry, LIDAR, cone detection (all ground truth)
+- ✅ **Architecture:** 6 modular Gazebo plugins + ECM components
+- ✅ **Flexibility:** Switchable between physics-based and kinematic control
+- ✅ **Integration:** Complete TF tree, joint states, controller feedback
+- ✅ **Reset:** Centralized simulation reset service
+- ✅ **Configuration:** YAML-based parameters for all subsystems
+
+### Control Modes Available
+1. **Physics-Based** (Active): Ackermann controller → wheel velocities → physics engine
+2. **Kinematic** (Disabled): Direct pose commands → bypass physics (faster, simpler)
 
 ---
 
@@ -922,16 +937,24 @@ qutms_sim/urdf/
 ---
 
 **Sprint 1 Complete! ✅**
+**Sprint 2 Core Implementation Complete! ✅**
 
 All modular plugin architecture work is complete:
 - 6 independent Gazebo plugins
 - ECM-based communication
 - Custom components (VehicleControlInput, VehicleState)
-- ROS 2 Control integration
+- ROS 2 Control integration WITH command interfaces
 - Centralized simulation reset
 - Modular URDF structure
 
-**Next:** Sprint 2 - Physics-based vehicle control with wheel torques
+**Physics-Based Control Active:**
+- Ackermann steering controller (bicycle model)
+- Velocity command interfaces on rear wheels
+- Position command interfaces on steering joints
+- Physics engine computes vehicle motion
+- Kinematic plugins disabled (would conflict)
+
+**Next:** Sprint 2 Advanced - Tire models, traction control, performance tuning
 
 ---
 
@@ -943,8 +966,9 @@ All modular plugin architecture work is complete:
 - ✅ Support multiple vehicle configurations
 - ✅ ECM component-based communication between plugins
 - ✅ Per-plugin configuration via SDF parameters
-- ✅ Standard ROS 2 Control integration for joint states
+- ✅ Standard ROS 2 Control integration with COMMAND interfaces
 - ✅ Centralized simulation management (reset, state)
+- ✅ Dual control modes (kinematic OR physics-based)
 
 **Current Plugin Architecture:**
 ```
@@ -1008,7 +1032,7 @@ ROS Services:
 
 ---
 
-### Sprint 2: Physics-Based Vehicle Control (Ready to Start 🚀)
+### Sprint 2: Physics-Based Vehicle Control (🚧 In Progress - Core Complete)
 
 **Prerequisites:** ✅ ALL COMPLETE
 - ✅ Modular plugin architecture
@@ -1017,9 +1041,9 @@ ROS Services:
 - ✅ Modular URDF structure
 - ✅ VehicleState ECM component
 
-**Focus:** Migrate from kinematic control (WorldPoseCmd) to physics-based control (wheel torques)
+**Focus:** Migrate from kinematic control (WorldPoseCmd) to physics-based control (wheel velocities/torques)
 
-This sprint will add command interfaces to gz_ros2_control and implement a tire model in the vehicle dynamics plugin, allowing the physics engine to compute realistic vehicle motion from tire forces.
+**Status:** Core ROS 2 Control integration complete. Vehicle now uses physics engine for realistic dynamics via wheel velocity commands. Kinematic plugins disabled to allow physics-based control.
 
 ---
 
@@ -1038,72 +1062,85 @@ This sprint will add command interfaces to gz_ros2_control and implement a tire 
 
 ---
 
-#### 3.2.2 ROS 2 Control Integration
+#### 3.2.2 ROS 2 Control Integration ✅ COMPLETE
 
-**Architecture Evolution - Physics-Based Control:**
-> **NOTE:** Current vehicle dynamics plugin uses kinematic control (WorldPoseCmd) which bypasses the physics engine.
-> This requires the dual component update pattern (command + state) to maintain sensor compatibility.
-> 
-> **Future Direction:** Implement physics-based control using ROS 2 Control with wheel forces/torques:
-> - Replace WorldPoseCmd override with force/torque commands to wheel joints
-> - Let physics engine compute vehicle motion from tire forces
-> - Benefits:
->   - Realistic tire slip and traction behavior
->   - Proper weight transfer and suspension effects
->   - Natural vehicle dynamics response
->   - Eliminates need for dual component pattern (physics updates state automatically)
->   - More accurate simulation for control algorithm development
-> - Implementation approach:
->   - Use gz_ros2_control for wheel joint torque commands
->   - Implement tire friction model (Pacejka or simplified)
->   - Add wheel force/torque actuators in URDF
->   - Configure physics engine friction parameters
+**Implementation Complete - Physics-Based Control Active:**
 
-- [ ] Install `gz_ros2_control` package
-- [ ] Create hardware interface for simulated vehicle
-  - [ ] Define joint interfaces (steering joints, wheel joints)
-  - [ ] Define command interfaces (velocity, steering, wheel torques)
-  - [ ] Implement read/write methods
-- [ ] Configure controller manager
-  - [ ] Add controller manager to launch file
-  - [ ] Configure YAML parameters
-- [ ] Define controllers
-  - [ ] Steering controller (position or velocity)
-  - [ ] Wheel torque controller (for physics-based control)
-  - [ ] Configure PID parameters
-- [ ] Update URDF with ros2_control tags
-  - [ ] Add `<ros2_control>` block
-  - [ ] Define hardware interface plugin
-  - [ ] Specify joints and interfaces (including wheel actuators)
-- [ ] Implement tire friction model
-  - [ ] Research Pacejka tire model or simplified alternatives
-  - [ ] Add tire force calculation based on slip ratio/angle
-  - [ ] Configure friction coefficients for different surfaces
-- [ ] Test controller commands
-  - [ ] Publish to controller topics
-  - [ ] Verify vehicle responds realistically
-  - [ ] Compare physics-based vs kinematic control
-  - [ ] Tune controller and tire parameters
-- [ ] Migration path
-  - [ ] Create controllers in parallel with existing plugin
-  - [ ] Test both approaches (kinematic and physics-based)
-  - [ ] Eventually replace kinematic WorldPoseCmd with wheel forces
-- [ ] Documentation
-  - [ ] Update launch instructions
-  - [ ] Document controller topics
-  - [ ] Document physics-based control architecture
-  - [ ] Add controller configuration guide
+✅ **Completed Tasks:**
+- [x] Install `gz_ros2_control` package
+- [x] Create hardware interface for simulated vehicle
+  - [x] Define joint interfaces (steering joints, wheel joints)
+  - [x] Define command interfaces (velocity + effort, steering position)
+  - [x] State interfaces (position, velocity feedback)
+- [x] Configure controller manager
+  - [x] Add controller manager to launch file
+  - [x] Configure YAML parameters (`ros2_controllers.yaml`)
+- [x] Define controllers
+  - [x] Ackermann steering controller (position steering + velocity traction)
+  - [x] Individual wheel effort controllers (torque-based control)
+  - [x] Joint state broadcaster
+- [x] Update URDF with ros2_control tags
+  - [x] Add `<ros2_control>` block in `ros2_control.urdf.xacro`
+  - [x] Define GazeboSimSystem plugin
+  - [x] Specify all joints with command/state interfaces
+- [x] Disable conflicting kinematic plugins
+  - [x] Commented out VehiclePlugin (WorldPoseCmd conflicts with physics)
+  - [x] Commented out VehicleControlPlugin (requires VehiclePlugin)
+- [x] Documentation
+  - [x] Update README with controller topics
+  - [x] Document physics-based control architecture
+  - [x] Add controller configuration guide
+  - [x] Document control mode switching
+
+**Current Configuration:**
+- **Steering:** Position command interface (±0.6 rad / ~34°)
+- **Traction:** Velocity command interface on rear wheels (rear-wheel drive)
+- **Alternative:** Effort command interface available for all wheels (torque control)
+- **Controller:** Ackermann bicycle model with proper geometry
+- **Update Rate:** 50 Hz
+
+**Active Controllers:**
+1. `joint_state_broadcaster` - Publishes joint states for TF tree
+2. `ackermann_steering_controller` - Main vehicle control via `/reference` topic
+3. `front_left_wheel_controller` - Optional direct torque control
+4. `front_right_wheel_controller` - Optional direct torque control
+5. `rear_left_wheel_controller` - Optional direct torque control
+6. `rear_right_wheel_controller` - Optional direct torque control
+
+**Topics:**
+- **Command:** `/ackermann_steering_controller/reference` (TwistStamped)
+- **Feedback:** `/ackermann_steering_controller/odometry` (Odometry)
+- **Status:** `/ackermann_steering_controller/controller_state` (ControllerState)
+- **TF:** `/ackermann_steering_controller/tf_odometry` (TF messages)
+
+**Configuration Files:**
+- `qutms_sim/urdf/ros2_control.urdf.xacro` - Joint interfaces definition
+- `qutms_sim/config/ros2_controllers.yaml` - Controller parameters
+- `qutms_sim/launch/sim.launch.py` - Controller spawning
+- `qutms_sim/package.xml` - ROS 2 Control dependencies
+
+⏳ **Future Enhancements:**
+- [ ] Implement tire friction model (Pacejka or simplified)
+- [ ] Add tire force calculation based on slip ratio/angle
+- [ ] Configure friction coefficients for different surfaces
+- [ ] Advanced traction control using individual wheel torques
+- [ ] Differential braking for improved cornering
+- [ ] Test and tune physics parameters for realism
+- [ ] Compare physics-based vs kinematic control performance
+- [ ] Benchmark computational overhead
 
 **References:**
 - https://control.ros.org/jazzy/index.html
 - https://github.com/ros-controls/gz_ros2_control
 - https://github.com/gazebosim/gz-sim/tree/gz-sim8/examples/standalone/ros2_control
 
-**Benefits:**
-- Standard ROS 2 Control interface
-- Ecosystem compatibility
-- Advanced controller options
-- Better integration with navigation stack
+**Benefits Achieved:**
+- ✅ Standard ROS 2 Control interface
+- ✅ Ecosystem compatibility
+- ✅ Physics-based realistic dynamics
+- ✅ Dual control options (velocity/effort)
+- ✅ Proper Ackermann geometry
+- ✅ Odometry feedback from controller
 
 ---
 

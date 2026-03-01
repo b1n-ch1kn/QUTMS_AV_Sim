@@ -2,6 +2,7 @@
 
 > **📍 ROS 2 Jazzy (Ubuntu 24.04)**  
 > This simulator uses ROS 2 Jazzy Jalisco with GZ Sim (Harmonic).  
+> **Current Mode:** Physics-Based Control (ROS 2 Control)
 >
 > **Documentation:**
 > - [TODO](./TODO.md) - Complete migration history and future roadmap
@@ -9,6 +10,10 @@
 ## Overview
 
 QUTMS_AV_Sim is designed to facilitate development of autonomous systems with little-to-no prior ROS 2 experience. It was intended to be used by the Queensland University of Technology Motorsport (QUTMS) team to develop their autonomous vehicle software in ROS 2. However, aligning with the open source philosophy and QUTMS's vision, it can be used by anyone. QUTMS_AV_Sim makes use of the [Gazebo](http://gazebosim.org/) simulator for lightweight ROS 2 specific vehicle URDFs with custom vehicle model plugins.
+
+The simulator supports **two control modes**:
+- **Physics-Based Control** (Active): ROS 2 Control with Ackermann steering controller - realistic vehicle dynamics via wheel velocities
+- **Kinematic Control** (Disabled): Custom plugins with direct pose/velocity commands - faster, simplified control
 
 QUTMS has and continues to use in varying capacities, forked versions the Formula Student Driverless Simulator (FSDS) and the Edinburgh University Formula Student Simulator (EUFS Sim). Some Gazebo and ROS 2 source code has also been forked from eufs_sim for this project.
 
@@ -42,6 +47,15 @@ sudo apt install ros-jazzy-xacro \
                  ros-jazzy-robot-state-publisher \
                  ros-jazzy-rviz2 \
                  ros-jazzy-foxglove-bridge
+
+# ROS 2 Control dependencies (for physics-based control)
+sudo apt install ros-jazzy-ros2-control \
+                 ros-jazzy-ros2-controllers \
+                 ros-jazzy-gz-ros2-control \
+                 ros-jazzy-controller-manager \
+                 ros-jazzy-joint-state-broadcaster \
+                 ros-jazzy-ackermann-steering-controller \
+                 ros-jazzy-effort-controllers
 ```
 
 ### 2. Clone Repositories
@@ -144,11 +158,67 @@ ros2 launch qutms_sim sim.launch.py track:=small_track foxglove:=true
 - `QR_Nov_2022`
 - `FSDS_Training`
 
+## Control Modes
+
+The simulator supports two distinct control architectures. **Currently using: Physics-Based Control**
+
+### Physics-Based Control (Active)
+
+**Architecture:** ROS 2 Control + Ackermann Steering Controller  
+**Method:** Wheel velocity commands → Physics engine computes vehicle motion  
+**Status:** ✅ Active (default)
+
+**Features:**
+- Realistic vehicle dynamics from tire-ground contact
+- Natural weight transfer and suspension behavior
+- Proper Ackermann steering geometry
+- Odometry feedback from controller
+- Supports velocity and effort (torque) interfaces
+
+**Controllers:**
+- `ackermann_steering_controller` - Bicycle model control
+- `joint_state_broadcaster` - Joint state publishing
+- Individual wheel effort controllers - Direct torque control
+
+**Use Case:** Advanced control algorithm development, realistic simulation
+
+### Kinematic Control (Disabled)
+
+**Architecture:** Custom Gazebo Plugins  
+**Method:** Direct pose/velocity commands via WorldPoseCmd  
+**Status:** ⏸️ Commented out (to enable, edit `qutms_sim/urdf/gz_plugins.urdf.xacro`)
+
+**Features:**
+- Fast, deterministic control
+- No physics engine overhead
+- Instant response to commands
+- Simpler for basic testing
+
+**Plugins:**
+- `VehiclePlugin` - Bicycle model kinematics
+- `VehicleControlPlugin` - Command input handling
+
+**Use Case:** Fast testing, simple scenarios, sensor algorithm development
+
+**To Switch Modes:**
+Edit [qutms_sim/urdf/gz_plugins.urdf.xacro](qutms_sim/urdf/gz_plugins.urdf.xacro):
+- Enable kinematic: Uncomment Vehicle & VehicleControl plugins
+- Enable physics: Uncomment those plugins (they conflict with ROS 2 Control)
+
 ## ROS 2 Topics
 
 ### Subscribed Topics (Control)
-- `/control/ackermann_cmd` - Ackermann drive commands
-- `/control/twist_cmd` - Twist (velocity) commands
+
+**Custom Vehicle Control (via plugins):**
+- `/control/ackermann_cmd` - Ackermann drive commands (high-level)
+- `/control/twist_cmd` - Twist (velocity) commands (high-level)
+
+**ROS 2 Control (physics-based):**
+- `/ackermann_steering_controller/reference` - Bicycle model control via TwistStamped
+- `/front_left_wheel_controller/commands` - Direct torque control (Nm)
+- `/front_right_wheel_controller/commands` - Direct torque control (Nm)
+- `/rear_left_wheel_controller/commands` - Direct torque control (Nm)
+- `/rear_right_wheel_controller/commands` - Direct torque control (Nm)
 
 ### Published Topics (Sensors & State)
 - `/odometry` - Noisy odometry (simulated INS sensor)
@@ -157,13 +227,18 @@ ros2 launch qutms_sim sim.launch.py track:=small_track foxglove:=true
 - `/scan` - LIDAR scan data
 - `/track/ground_truth` - Ground truth track (all cones)
 - `/detections/ground_truth` - Simulated cone detections
+- `/ackermann_steering_controller/odometry` - Controller odometry feedback
+- `/ackermann_steering_controller/controller_state` - Controller status
+- `/ackermann_steering_controller/tf_odometry` - TF-based odometry
 
 ### Services
 - `/reset_simulation` - Reset vehicle and cones to starting positions
 
 ## Sending Commands
 
-### Using Command Line
+### Using Custom Vehicle Control Plugin
+
+The custom vehicle control plugin provides high-level Ackermann and Twist interfaces:
 
 ```bash
 # Publish Ackermann command
@@ -181,6 +256,61 @@ linear:
 angular:
   z: 0.1
 "
+```
+
+### Using ROS 2 Control (Physics-Based)
+
+ROS 2 Control provides physics-based control using the Ackermann steering controller:
+
+```bash
+# Send TwistStamped to Ackermann steering controller (bicycle model)
+# Command topic is /ackermann_steering_controller/reference
+ros2 topic pub /ackermann_steering_controller/reference geometry_msgs/msg/TwistStamped "
+header:
+  stamp:
+    sec: 0
+    nanosec: 0
+  frame_id: ''
+twist:
+  linear:
+    x: 5.0
+    y: 0.0
+    z: 0.0
+  angular:
+    x: 0.0
+    y: 0.0
+    z: 0.3
+"
+
+# Or use a simpler one-liner (auto-fills header)
+ros2 topic pub /ackermann_steering_controller/reference geometry_msgs/msg/TwistStamped "{twist: {linear: {x: 5.0}, angular: {z: 0.3}}}"
+
+# Or control individual wheels directly with torques (effort in Nm)
+ros2 topic pub /front_left_wheel_controller/commands std_msgs/msg/Float64MultiArray "
+data: [50.0]
+"
+```
+
+**Note:** The Ackermann steering controller automatically:
+- Converts TwistStamped reference to steering angles and wheel velocities
+- Handles Ackermann geometry (wheelbase, track width)
+- Applies velocity/acceleration limits
+- Computes proper left/right steering angles
+- Publishes odometry feedback on `/ackermann_steering_controller/odometry`
+
+### List Active Controllers
+
+```bash
+# List all controllers
+ros2 control list_controllers
+
+# Expected output:
+# joint_state_broadcaster[joint_state_broadcaster/JointStateBroadcaster] active
+# ackermann_steering_controller[ackermann_steering_controller/AckermannSteeringController] active
+# front_left_wheel_controller[effort_controllers/JointGroupEffortController] active
+# front_right_wheel_controller[effort_controllers/JointGroupEffortController] active
+# rear_left_wheel_controller[effort_controllers/JointGroupEffortController] active
+# rear_right_wheel_controller[effort_controllers/JointGroupEffortController] active
 ```
 
 ### Reset Simulation
@@ -212,6 +342,27 @@ Edit `qutms_sim/config/vehicle_params.yaml` to configure:
 Edit `qutms_sim/config/motion_noise.yaml` to configure:
 - Odometry noise parameters
 - Sensor standard deviations
+
+### ROS 2 Controllers
+
+Edit `qutms_sim/config/ros2_controllers.yaml` to configure physics-based controllers:
+
+**Ackermann Steering Controller:**
+- Vehicle geometry (wheelbase, track width, wheel radius)
+- Steering limits and interface type (position/velocity)
+- Wheel control interface type (effort/velocity)
+- Velocity and acceleration limits
+
+**Individual Wheel Effort Controllers:**
+- Direct torque control for each wheel
+- Useful for traction control, differential braking, etc.
+
+The configuration includes:
+- `joint_state_broadcaster` - Publishes joint states to `/joint_states`
+- `ackermann_steering_controller` - Bicycle model control
+- Individual wheel effort controllers - Direct torque commands
+
+Controllers are automatically spawned at launch and can be managed using `ros2 control` CLI tools.
 
 ### Plugin Configuration
 
@@ -291,6 +442,81 @@ You can download the simulator's `.json` dashboard from GitHub: `https://github.
 
 See the member setup guide for more information on how to use Foxglove Studio and custom dashboards.
 
+## Quick Reference
+
+### Physics-Based Control (Active)
+
+**Test vehicle control:**
+```bash
+# Drive forward with slight left turn
+ros2 topic pub /ackermann_steering_controller/reference geometry_msgs/msg/TwistStamped "{twist: {linear: {x: 5.0}, angular: {z: 0.3}}}"
+
+# Stop
+ros2 topic pub /ackermann_steering_controller/reference geometry_msgs/msg/TwistStamped "{twist: {linear: {x: 0.0}, angular: {z: 0.0}}}"
+```
+
+**Monitor controller:**
+```bash
+# List active controllers
+ros2 control list_controllers
+
+# View controller odometry
+ros2 topic echo /ackermann_steering_controller/odometry
+
+# View controller state
+ros2 topic echo /ackermann_steering_controller/controller_state
+```
+
+**Direct wheel torque control:**
+```bash
+# Apply 50 Nm to rear left wheel
+ros2 topic pub /rear_left_wheel_controller/commands std_msgs/msg/Float64MultiArray "{data: [50.0]}"
+```
+
+### Kinematic Control (Disabled)
+
+To switch to kinematic control mode:
+1. Edit [qutms_sim/urdf/gz_plugins.urdf.xacro](qutms_sim/urdf/gz_plugins.urdf.xacro)
+2. Uncomment the `VehiclePlugin` and `VehicleControlPlugin` sections
+3. Rebuild: `colcon build --symlink-install --packages-select qutms_sim`
+4. Launch normally
+
+**Commands (when kinematic mode is active):**
+```bash
+# Ackermann command
+ros2 topic pub /control/ackermann_cmd ackermann_msgs/msg/AckermannDriveStamped "{drive: {speed: 5.0, steering_angle: 0.2}}"
+
+# Twist command
+ros2 topic pub /control/twist_cmd geometry_msgs/msg/Twist "{linear: {x: 5.0}, angular: {z: 0.3}}"
+```
+
+### Key Topics Summary
+
+| Topic | Type | Mode | Description |
+|-------|------|------|-------------|
+| `/ackermann_steering_controller/reference` | TwistStamped | Physics | Command input |
+| `/ackermann_steering_controller/odometry` | Odometry | Physics | Controller feedback |
+| `/control/ackermann_cmd` | AckermannDriveStamped | Kinematic | Command input |
+| `/control/twist_cmd` | Twist | Kinematic | Command input |
+| `/odometry` | Odometry | Both | INS sensor (noisy) |
+| `/odometry/ground_truth` | Odometry | Both | Perfect odometry |
+| `/joint_states` | JointState | Both | All joint states |
+| `/scan` | LaserScan | Both | LIDAR data |
+| `/track/ground_truth` | ConeArray | Both | All track cones |
+| `/detections/ground_truth` | ConeArray | Both | Detected cones |
+
+### Configuration Files
+
+| File | Purpose |
+|------|---------|
+| `qutms_sim/config/ros2_controllers.yaml` | ROS 2 Control parameters |
+| `qutms_sim/config/vehicle_params.yaml` | Vehicle geometry, limits |
+| `qutms_sim/config/motion_noise.yaml` | Sensor noise parameters |
+| `qutms_sim/config/config.yaml` | General simulation settings |
+| `qutms_sim/urdf/ros2_control.urdf.xacro` | Joint interface definitions |
+| `qutms_sim/urdf/gz_plugins.urdf.xacro` | Plugin configuration |
+| `qutms_sim/urdf/robot.urdf.xacro` | Main vehicle structure |
+
 ## Troubleshooting
 
 ### Plugin Not Loading
@@ -352,9 +578,40 @@ gz sim --version
 
 ## Additional Resources
 
-- [TODO](./COMPREHENSIVE_TODO.md) - Complete migration history and roadmap
+- [TODO](./TODO.md) - Complete migration history and roadmap
 - [GZ Sim Tutorials](https://gazebosim.org/docs/harmonic/tutorials)
 - [ROS 2 Jazzy Documentation](https://docs.ros.org/en/jazzy/)
+- [ROS 2 Control Documentation](https://control.ros.org/jazzy/index.html)
+- [Ackermann Steering Controller](https://control.ros.org/jazzy/doc/ros2_controllers/ackermann_steering_controller/doc/userdoc.html)
+
+## Development Status
+
+### Completed ✅
+- ✅ ROS 2 Jazzy + GZ Sim Harmonic migration
+- ✅ 6 modular Gazebo plugins (ECM-based)
+- ✅ Custom ECM components (VehicleControlInput, VehicleState)
+- ✅ ROS 2 Control integration with command interfaces
+- ✅ Ackermann steering controller (bicycle model)
+- ✅ Physics-based vehicle dynamics
+- ✅ Dual control modes (physics/kinematic)
+- ✅ Modular URDF architecture
+- ✅ Joint state broadcasting
+- ✅ TF tree publishing
+- ✅ Simulation reset service
+- ✅ Ground truth sensors (odometry, cone detection)
+- ✅ Configurable noise models
+
+### In Progress 🚧
+- 🚧 Advanced tire friction models
+- 🚧 Traction control algorithms
+- 🚧 Performance optimization
+
+### Future Plans 📋
+- 📋 Additional sensor plugins (cameras, IMU)
+- 📋 Multi-vehicle support
+- 📋 Advanced weather/lighting conditions
+- 📋 Trajectory visualization tools
+- 📋 Automated testing framework
 
 ## Support
 

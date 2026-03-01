@@ -6,8 +6,121 @@
       # Joint State Broadcaster - publishes joint states to /joint_states
       joint_state_broadcaster:
         type: joint_state_broadcaster/JointStateBroadcaster
+      
+      # Ackermann Steering Controller - bicycle model control
+      ackermann_steering_controller:
+        type: ackermann_steering_controller/AckermannSteeringController
+      
+      # Effort Controllers - individual wheel torque control
+      front_left_wheel_controller:
+        type: effort_controllers/JointGroupEffortController
+      
+      front_right_wheel_controller:
+        type: effort_controllers/JointGroupEffortController
+      
+      rear_left_wheel_controller:
+        type: effort_controllers/JointGroupEffortController
+      
+      rear_right_wheel_controller:
+        type: effort_controllers/JointGroupEffortController
 
-# Future controllers can be added here as we migrate to physics-based control:
-# - Ackermann steering controller
-# - Wheel velocity controllers
-# - Force/torque controllers for physics-based dynamics
+
+  # ============================================================================
+  # Ackermann Steering Controller Configuration
+  # ============================================================================
+  # Bicycle model controller - converts cmd_vel to steering + wheel commands
+  # Uses velocity commands for rear wheels (traction) and position for steering
+  # Replicates the behavior of our custom vehicle control plugin
+
+  ackermann_steering_controller:
+    ros__parameters:
+      # Vehicle reference frame
+      reference_timeout: 0.5  # Timeout for cmd_vel (s)
+      
+      # Steering configuration
+      front_steering: true  # Front-wheel steering
+      rear_steering: false  # No rear steering
+      
+      # Steering joints (NEW parameter names for Jazzy)
+      steering_joints_names: ['left_steering_hinge_joint', 'right_steering_hinge_joint']
+      
+      # Traction/wheel joints - MUST be exactly 2 for bicycle model (left, right)
+      # Using rear wheels for traction (common for Ackermann/bicycle models)
+      traction_joints_names: ['rear_left_wheel_joint', 'rear_right_wheel_joint']
+      
+      # Vehicle geometry (NEW parameter names for Jazzy)
+      wheelbase: 1.580  # Distance between front and rear axles (m)
+      steering_track_width: 1.400  # Distance between left and right steering joints (m)
+      traction_track_width: 1.400  # Distance between left and right traction wheels (m)
+      traction_wheels_radius: 0.2032  # Wheel radius (m) - REQUIRED for odometry
+      
+      # Steering limits
+      front_steering_angle_limit: 0.6  # Max steering angle (rad) ~34 degrees
+      
+      # Command interface types
+      steering_interface_type: position  # Control steering via position
+      traction_interface_type: velocity  # Control wheels via velocity (Ackermann default)
+      
+      # Velocity and acceleration limits
+      linear:
+        x:
+          max_velocity: 20.0  # m/s - adjust for your vehicle
+          min_velocity: -5.0  # m/s - reverse
+          max_acceleration: 5.0  # m/s²
+          min_acceleration: -5.0  # m/s²
+      
+      angular:
+        z:
+          max_velocity: 3.0  # rad/s - yaw rate limit
+          max_acceleration: 2.0  # rad/s²
+
+
+  # ============================================================================
+  # Individual Wheel Effort Controllers
+  # ============================================================================
+  # These provide direct torque control to each wheel
+  # Can be used for traction control, differential braking, etc.
+
+  front_left_wheel_controller:
+    ros__parameters:
+      joints:
+        - front_left_wheel_joint
+      interface_name: effort
+      command_interfaces:
+        - effort
+      state_interfaces:
+        - position
+        - velocity
+
+  front_right_wheel_controller:
+    ros__parameters:
+      joints:
+        - front_right_wheel_joint
+      interface_name: effort
+      command_interfaces:
+        - effort
+      state_interfaces:
+        - position
+        - velocity
+
+  rear_left_wheel_controller:
+    ros__parameters:
+      joints:
+        - rear_left_wheel_joint
+      interface_name: effort
+      command_interfaces:
+        - effort
+      state_interfaces:
+        - position
+        - velocity
+
+  rear_right_wheel_controller:
+    ros__parameters:
+      joints:
+        - rear_right_wheel_joint
+      interface_name: effort
+      command_interfaces:
+        - effort
+      state_interfaces:
+        - position
+        - velocity

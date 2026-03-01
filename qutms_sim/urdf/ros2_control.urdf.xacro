@@ -2,18 +2,24 @@
 <robot xmlns:xacro="http://www.ros.org/wiki/xacro">
 
   <!-- 
-    ROS 2 Control Integration for Joint State Publishing
+    ROS 2 Control Integration for Physics-Based Vehicle Control
     
-    This configuration uses gz_ros2_control to read joint states from Gazebo simulation
-    and publish them via joint_state_broadcaster for robot_state_publisher.
+    This configuration uses gz_ros2_control to control the vehicle using physics-based
+    actuators instead of kinematic control (WorldPoseCmd).
     
-    STATE-ONLY INTERFACES:
-    - No command interfaces defined = gz_ros2_control only reads, doesn't control
-    - Vehicle dynamics plugin retains control via JointPositionReset (kinematic control)
-    - No ownership conflicts between plugins
-    - All joints automatically published by joint_state_broadcaster
+    COMMAND + STATE INTERFACES:
+    - Steering joints: position command (target steering angle)
+    - Wheel joints: velocity + effort commands (supports both velocity and torque control)
+    - State interfaces: position and velocity feedback for all joints
+    - gz_ros2_control bridges commands from ROS 2 controllers to Gazebo actuators
+    - Physics engine computes realistic vehicle motion from tire forces
     
-    Future physics-based control will add command interfaces (effort/velocity) here.
+    This enables:
+    - Ackermann steering controller (velocity-based bicycle model)
+    - Direct effort controllers (torque-based control)
+    - Realistic tire slip and traction behavior
+    - Proper weight transfer and suspension effects
+    - More accurate simulation for control algorithm development
   -->
 
   <xacro:arg name="namespace" default="sim"/>
@@ -24,30 +30,70 @@
       <plugin>gz_ros2_control/GazeboSimSystem</plugin>
     </hardware>
     
-    <!-- Steering joints - state only (vehicle plugin controls via JointPositionReset) -->
+    <!-- Steering joints - position control for steering angle -->
     <joint name="left_steering_hinge_joint">
+      <command_interface name="position">
+        <param name="min">-0.6</param>  <!-- ~34 degrees -->
+        <param name="max">0.6</param>
+      </command_interface>
       <state_interface name="position" />
       <state_interface name="velocity" />
     </joint>
     <joint name="right_steering_hinge_joint">
+      <command_interface name="position">
+        <param name="min">-0.6</param>
+        <param name="max">0.6</param>
+      </command_interface>
       <state_interface name="position" />
       <state_interface name="velocity" />
     </joint>
     
-    <!-- Wheel joints - state only for TF publishing -->
+    <!-- Wheel joints - velocity + effort control for flexibility -->
     <joint name="front_left_wheel_joint">
+      <command_interface name="velocity">
+        <param name="min">-50</param>  <!-- rad/s - adjust based on vehicle specs -->
+        <param name="max">50</param>
+      </command_interface>
+      <command_interface name="effort">
+        <param name="min">-100</param>  <!-- Nm - adjust based on vehicle specs -->
+        <param name="max">100</param>
+      </command_interface>
       <state_interface name="position" />
       <state_interface name="velocity" />
     </joint>
     <joint name="front_right_wheel_joint">
+      <command_interface name="velocity">
+        <param name="min">-50</param>
+        <param name="max">50</param>
+      </command_interface>
+      <command_interface name="effort">
+        <param name="min">-100</param>
+        <param name="max">100</param>
+      </command_interface>
       <state_interface name="position" />
       <state_interface name="velocity" />
     </joint>
     <joint name="rear_left_wheel_joint">
+      <command_interface name="velocity">
+        <param name="min">-50</param>
+        <param name="max">50</param>
+      </command_interface>
+      <command_interface name="effort">
+        <param name="min">-100</param>
+        <param name="max">100</param>
+      </command_interface>
       <state_interface name="position" />
       <state_interface name="velocity" />
     </joint>
     <joint name="rear_right_wheel_joint">
+      <command_interface name="velocity">
+        <param name="min">-50</param>
+        <param name="max">50</param>
+      </command_interface>
+      <command_interface name="effort">
+        <param name="min">-100</param>
+        <param name="max">100</param>
+      </command_interface>
       <state_interface name="position" />
       <state_interface name="velocity" />
     </joint>

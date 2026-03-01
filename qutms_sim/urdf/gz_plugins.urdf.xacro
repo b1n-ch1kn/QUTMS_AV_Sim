@@ -15,7 +15,7 @@
     - Cone Detection: Ground truth cone detection simulation
     - Sim Reset: Centralized reset for vehicle and world
     Gazebo Standard:
-    - gz_ros2_control: Reads joint states for robot_state_publisher (no command interfaces)
+    - gz_ros2_control: Command and state interfaces for physics-based control
     
     Plugins communicate via ECM components:
     - VehicleControlInput: Control commands (from control → dynamics)
@@ -25,18 +25,12 @@
 
   <xacro:arg name="namespace" default="sim"/>
 
-  <!-- Vehicle Dynamics Plugin -->
+  <!-- Vehicle Dynamics Plugin - DISABLED for ROS 2 Control Testing -->
+  <!-- 
+    IMPORTANT: This plugin uses WorldPoseCmd for kinematic control, which conflicts
+    with physics-based ROS 2 Control. Uncomment this to use custom vehicle control.
+    
   <gazebo>
-    <!--
-      Core vehicle dynamics simulation using kinematic bicycle model.
-      
-      Reads: VehicleControlInput (from vehicle_control_plugin)
-      Writes: WorldPoseCmd, WorldLinearVelocityCmd, WorldAngularVelocityCmd
-              JointPositionReset (steering joints)
-              VehicleState (full dynamics state for other plugins)
-      
-      Future: Will be refactored to physics-based control with wheel torques
-    -->
     <plugin filename="libgazebo_vehicle.so" name="gazebo_plugins::vehicle_plugins::VehiclePlugin">
       <ros>
         <namespace>/$(arg namespace)</namespace>
@@ -46,18 +40,11 @@
       <steering_lock_time>1.5</steering_lock_time>
     </plugin>
   </gazebo>
+  -->
 
-  <!-- Vehicle Control Plugin -->
+  <!-- Vehicle Control Plugin - DISABLED (requires vehicle dynamics plugin) -->
+  <!--
   <gazebo>
-    <!--
-      Handles ROS command inputs and converts to ECM control components.
-      
-      Subscribes: /$(arg namespace)/control/ackermann_cmd (ackermann_msgs/AckermannDrive)
-                  /$(arg namespace)/control/twist_cmd (geometry_msgs/Twist)
-      Writes: VehicleControlInput (ECM component for vehicle dynamics)
-      
-      Features: Command timeout handling, dual input support
-    -->
     <plugin filename="libgazebo_vehicle_control.so" name="gazebo_plugins::vehicle_plugins::VehicleControlPlugin">
       <ros>
         <namespace>/$(arg namespace)</namespace>
@@ -69,6 +56,7 @@
       <twist_topic>control/twist_cmd</twist_topic>
     </plugin>
   </gazebo>
+  -->
 
   <!-- INS Odometry Plugin -->
   <gazebo>
@@ -173,10 +161,17 @@
   <!-- gz_ros2_control Gazebo Plugin -->
   <gazebo>
     <!-- 
-      gz_ros2_control plugin - reads joint states from simulation
-      joint_state_broadcaster publishes to /$(arg namespace)/joint_states for robot_state_publisher
+      gz_ros2_control plugin - bridges ROS 2 Control with Gazebo simulation
       
-      Controller configuration loaded from ros2_controllers.yaml
+      Provides command and state interfaces for physics-based vehicle control:
+      - Steering joints: position commands (target angle)
+      - Wheel joints: effort commands (torque for propulsion/braking)
+      - State feedback: position and velocity for all joints
+      
+      Controllers (configured in ros2_controllers.yaml):
+      - joint_state_broadcaster: Publishes to /joint_states for robot_state_publisher
+      - ackermann_steering_controller: Bicycle model control via /cmd_vel
+      - wheel effort controllers: Direct torque control for individual wheels
     -->
     <plugin filename="gz_ros2_control-system" 
             name="gz_ros2_control::GazeboSimROS2ControlPlugin">

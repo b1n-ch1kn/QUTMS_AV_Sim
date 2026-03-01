@@ -14,11 +14,23 @@ from launch_ros.actions import Node
 
 sim_pkg = get_package_share_directory("qutms_sim")
 
+
+def parse_yaml(absolute_file_path: str):
+    """
+    Parse yaml from file, given its absolute file path.
+    """
+    try:
+        with open(absolute_file_path, "r") as file:
+            return yaml.safe_load(file)
+    except EnvironmentError:
+        return None
+
+
 def get_argument(context, arg):
     return LaunchConfiguration(arg).perform(context)
 
 
-def gen_world(context, *args, **kwargs):
+def load_world(context, *args, **kwargs):
     track = str(get_argument(context, "track") + ".sdf")
 
     QUTMS = os.path.expanduser(os.environ.get("QUTMS_WS"))
@@ -37,20 +49,25 @@ def gen_world(context, *args, **kwargs):
 
     world_path = join(sim_pkg, "worlds", track)
 
-    gz_sim_launch = join(get_package_share_directory("ros_gz_sim"), "launch", "gz_sim.launch.py")
+    gz_launch_path = join(get_package_share_directory("ros_gz_sim"), "launch", "gz_sim.launch.py")
+    
+    gz_sim_launch = IncludeLaunchDescription(
+        launch_description_source=PythonLaunchDescriptionSource(gz_launch_path),
+        launch_arguments=[
+            ("gz_args", f"-r {world_path} -s"),
+            ("on_exit_shutdown", "true"),
+        ],
+    )
 
     return [
-        IncludeLaunchDescription(
-            launch_description_source=PythonLaunchDescriptionSource(gz_sim_launch),
-            launch_arguments=[
-                ("gz_args", f"-r {world_path} -s"),
-                ("on_exit_shutdown", "true"),
-            ],
-        ),
+        gz_sim_launch,
     ]
 
 
-def spawn_car(context, *args, **kwargs):
+def load_car(context, *args, **kwargs):
+
+    ### Vehicle and URDF setup ###
+
     # get x,y,z,roll,pitch,yaw from track csv file
     track = get_argument(context, "track")
 
@@ -68,22 +85,8 @@ def spawn_car(context, *args, **kwargs):
     display_car = get_argument(context, "display_car")
     namespace = get_argument(context, "namespace")
 
-    # Prepare bridge configuration with world name replacement
-    bridge_config_in = join(sim_pkg, "config", "bridge.yaml")
-    bridge_config_out = join(sim_pkg, "config", f"bridge_{track}.yaml")
-    
-    with open(bridge_config_in, "r") as f:
-        bridge_yaml = f.read()
-    
-    # Replace world name placeholder with actual track name
-    bridge_yaml = bridge_yaml.replace("WORLD_NAME", track)
-    
-    with open(bridge_config_out, "w") as f:
-        f.write(bridge_yaml)
-
     xacro_path = join(sim_pkg, "urdf", "robot.urdf.xacro")
     urdf_path = join(sim_pkg, "urdf", "robot.urdf")
-    controller_config = join(sim_pkg, "config", "ros2_controllers.yaml")
 
     if not isfile(urdf_path):
         os.mknod(urdf_path)
@@ -103,109 +106,135 @@ def spawn_car(context, *args, **kwargs):
     with open(urdf_path, "r") as urdf_file:
         robot_description = urdf_file.read()
 
-    return [
-        TimerAction(
-            period=3.0,
-            actions=[
+    spawn_node = TimerAction(period=3.0, actions=[
+        Node(
+            name="spawn_robot",
+            package="ros_gz_sim",
+            executable="create",
+            output="screen",
+            arguments=[
+                "-name", "QEV-3D",
+                "-file", urdf_path,
+                "-x", x,
+                "-y", y,
+                "-z", "0.5",
+                "-Y", yaw,
+                "--ros-args",
+                "--log-level", "warn",
+            ],
+        ),
+    ])
+
+    # robot_state_publisher subscribes to joint_states and publishes TF transforms
+    # It automatically uses the namespace, so it listens to /sim/joint_states
+    rsp_node = Node(
+        name="robot_state_publisher",
+        package="robot_state_publisher",
+        executable="robot_state_publisher",
+        output="screen",
+        namespace=namespace,
+        parameters=[
+            {
+                "robot_description": robot_description,
+                "rate": 200,
+                "use_sim_time": LaunchConfiguration("use_sim_time"),
+            }
+        ],
+        arguments=["--ros-args", "--log-level", "warn"],
+    )
+
+
+    ### Gazebo-ROS bridge setup ###
+
+    # Prepare bridge configuration with world name replacement
+    bridge_config_in = join(sim_pkg, "config", "bridge.yaml")
+    bridge_config_out = join(sim_pkg, "config", f"bridge_{track}.yaml")
+    
+    with open(bridge_config_in, "r") as f:
+        bridge_yaml = f.read()
+    
+    # Replace world name placeholder with actual track name
+    bridge_yaml = bridge_yaml.replace("WORLD_NAME", track)
+    
+    with open(bridge_config_out, "w") as f:
+        f.write(bridge_yaml)
+
+    gz_bridge_node = Node(
+        package="ros_gz_bridge",
+        executable="parameter_bridge",
+        name="gz_bridge",
+        namespace=namespace,
+        output="screen",
+        parameters=[
+            {
+                "use_sim_time": LaunchConfiguration("use_sim_time"),
+                "config_file": bridge_config_out,
+            }
+        ],
+        arguments=["--ros-args", "--log-level", "warn"],
+    )
+
+
+    ### ROS2 Control setup ###
+
+    controller_config = join(sim_pkg, "config", "ros2_controllers.yaml")
+    controller_yaml = parse_yaml(controller_config)["/**"]
+    controller_names = ["joint_state_broadcaster"]
+    for name, _ in controller_yaml.items():
+        if name == "controller_manager":
+            continue
+        controller_names.append(name)
+
+    controllers = []
+    # Controller spawners - sequentially load and activate controllers
+    for name in controller_names:
+        controllers.append(
+            TimerAction(period=3.0, actions=[
                 Node(
-                    name="spawn_robot",
-                    package="ros_gz_sim",
-                    executable="create",
+                    package="controller_manager",
+                    executable="spawner",
+                    arguments=[name,
+                            "--param-file",
+                            controller_config],
                     output="screen",
-                    arguments=[
-                        "-name",
-                        "QEV-3D",
-                        "-file",
-                        urdf_path,
-                        "-x",
-                        x,
-                        "-y",
-                        y,
-                        "-z",
-                        "0.5",
-                        "-Y",
-                        yaw,
-                        "--ros-args",
-                        "--log-level",
-                        "warn",
-                    ],
-                ),
-            ],
-        ),
-        # robot_state_publisher subscribes to joint_states and publishes TF transforms
-        # It automatically uses the namespace, so it listens to /sim/joint_states
-        Node(
-            name="robot_state_publisher",
-            package="robot_state_publisher",
-            executable="robot_state_publisher",
-            output="screen",
-            namespace=namespace,
-            parameters=[
-                {
-                    "robot_description": robot_description,
-                    "rate": 200,
-                    "use_sim_time": LaunchConfiguration("use_sim_time"),
-                }
-            ],
-            arguments=["--ros-args", "--log-level", "warn"],
-        ),
-        # Controller spawner - loads and activates joint_state_broadcaster
-        TimerAction(period=3.0, actions=[
-            Node(
-                package="controller_manager",
-                executable="spawner",
-                namespace=namespace,
-                output="screen",
-                arguments=[
-                    "joint_state_broadcaster",
-                    "--param-file",
-                    controller_config,
-                ],
-            ),
-        ]),
-        Node(
-            package="ros_gz_bridge",
-            executable="parameter_bridge",
-            name="gz_bridge",
-            namespace=namespace,
-            output="screen",
-            parameters=[
-                {
-                    "use_sim_time": LaunchConfiguration("use_sim_time"),
-                    "config_file": bridge_config_out,
-                }
-            ],
-            arguments=["--ros-args", "--log-level", "warn"],
-        ),
-    ]
+                )
+            ])
+        )
+
+    return [
+        spawn_node,
+        rsp_node,
+        gz_bridge_node,
+    ] + controllers
 
 
 def load_visuals(context, *args, **kwargs):
     rviz_config_file = join(sim_pkg, "visuals", "default.rviz")
 
-    return [
-        TimerAction(
-            period=3.0,
-            actions=[
-                Node(
-                    package="rviz2",
-                    executable="rviz2",
-                    arguments=["-d", rviz_config_file],
-                    condition=IfCondition(LaunchConfiguration("rviz")),
-                    parameters=[
-                        {"use_sim_time": LaunchConfiguration("use_sim_time")}
-                    ],
-                ),
-            ],
-        ),
+    rviz_node = TimerAction(period=3.0, actions=[
         Node(
-            package="foxglove_bridge",
-            executable="foxglove_bridge",
-            condition=IfCondition(LaunchConfiguration("foxglove")),
+            package="rviz2",
+            executable="rviz2",
+            arguments=["-d", rviz_config_file],
+            condition=IfCondition(LaunchConfiguration("rviz")),
             parameters=[
                 {"use_sim_time": LaunchConfiguration("use_sim_time")}
             ],
         ),
+    ])
+
+    foxglove_node = Node(
+        package="foxglove_bridge",
+        executable="foxglove_bridge",
+        condition=IfCondition(LaunchConfiguration("foxglove")),
+        parameters=[
+            {"use_sim_time": LaunchConfiguration("use_sim_time")}
+        ],
+    )
+
+    return [
+        rviz_node,
+        foxglove_node,
     ]
 
 def generate_launch_description():
@@ -269,9 +298,9 @@ def generate_launch_description():
             ),
             OpaqueFunction(function=load_visuals),
             # launch the gazebo world
-            OpaqueFunction(function=gen_world),
+            OpaqueFunction(function=load_world),
             # launch the car
-            OpaqueFunction(function=spawn_car),
+            OpaqueFunction(function=load_car),
         ]
     )
 
