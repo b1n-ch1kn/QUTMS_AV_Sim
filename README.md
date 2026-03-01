@@ -2,7 +2,8 @@
 
 > **📍 ROS 2 Jazzy (Ubuntu 24.04)**  
 > This simulator uses ROS 2 Jazzy Jalisco with GZ Sim (Harmonic).  
-> **Current Mode:** Physics-Based Control (ROS 2 Control)
+> **Current Mode:** Physics-Based Control (ROS 2 Control)  
+> **Status:** ✅ Fully operational - Ackermann steering controller working with realistic vehicle dynamics
 >
 > **Documentation:**
 > - [TODO](./TODO.md) - Complete migration history and future roadmap
@@ -166,7 +167,7 @@ The simulator supports two distinct control architectures. **Currently using: Ph
 
 **Architecture:** ROS 2 Control + Ackermann Steering Controller  
 **Method:** Wheel velocity commands → Physics engine computes vehicle motion  
-**Status:** ✅ Active (default)
+**Status:** ✅ Active (default) - **Fully operational and tested**
 
 **Features:**
 - Realistic vehicle dynamics from tire-ground contact
@@ -298,6 +299,12 @@ data: [50.0]
 - Computes proper left/right steering angles
 - Publishes odometry feedback on `/ackermann_steering_controller/odometry`
 
+**Key Configuration Details:**
+- Front wheels have **state-only interfaces** (they rotate passively from ground friction)
+- Rear wheels have **velocity command interfaces** (actively driven)
+- Steering hinges have **position command interfaces** (actively steered)
+- Update rate: 100 Hz for responsive control
+
 ### List Active Controllers
 
 ```bash
@@ -346,6 +353,13 @@ Edit `qutms_sim/config/motion_noise.yaml` to configure:
 ### ROS 2 Controllers
 
 Edit `qutms_sim/config/ros2_controllers.yaml` to configure physics-based controllers:
+
+**Important:** The configuration has been optimized for realistic physics simulation:
+- `enable_odom_tf: false` - Odometry TF to be handled by autonomous system
+- `open_loop: false` - Uses velocity feedback for accurate control
+- `position_feedback: false` - Relies on commanded positions (standard for Ackermann)
+- `velocity_rolling_window_size: 10` - Smooths velocity measurements
+- **Critical:** Front wheel joints must NOT have command interfaces (passive rotation only)
 
 **Ackermann Steering Controller:**
 - Vehicle geometry (wheelbase, track width, wheel radius)
@@ -585,6 +599,14 @@ gz sim --version
 - [Ackermann Steering Controller](https://control.ros.org/jazzy/doc/ros2_controllers/ackermann_steering_controller/doc/userdoc.html)
 
 ## Development Status
+
+**ROS 2 Control Integration Complete:**
+- ✅ Ackermann steering controller fully operational
+- ✅ Front wheels now rotate correctly (passive rotation via ground friction)
+- ✅ Resolved interface configuration: front wheels use state-only, rear wheels use velocity commands
+- ✅ Fixed wheel joint axis configuration to match gz_ros2_control_demos standard
+- ✅ Controller update rate increased to 100 Hz for responsive control
+- ✅ All wheels and steering hinges properly integrated with physics engine
 
 ### Completed ✅
 - ✅ ROS 2 Jazzy + GZ Sim Harmonic migration
