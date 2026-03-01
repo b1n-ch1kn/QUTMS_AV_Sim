@@ -15,17 +15,7 @@
 #include "rclcpp/rclcpp.hpp"
 
 // ROS msgs
-#include "ackermann_msgs/msg/ackermann_drive_stamped.hpp"
-#include "geometry_msgs/msg/vector3.hpp"
-#include "geometry_msgs/msg/quaternion.hpp"
-#include "geometry_msgs/msg/twist.hpp"
-#include "nav_msgs/msg/odometry.hpp"
 #include "sensor_msgs/msg/joint_state.hpp"
-
-// ROS TF2
-#include <tf2/transform_datatypes.h>
-#include <tf2/utils.h>
-#include "tf2_geometry_msgs/tf2_geometry_msgs.hpp"
 
 // ROS srvs
 #include <std_srvs/srv/trigger.hpp>
@@ -81,14 +71,10 @@ class VehiclePlugin : public gz::sim::System,
     void setModelState(gz::sim::EntityComponentManager &ecm);
     void update(const gz::sim::UpdateInfo &info, gz::sim::EntityComponentManager &ecm);
 
-    nav_msgs::msg::Odometry stateToOdom(const State &state, const rclcpp::Time &stamp);
-    State odomToState(const nav_msgs::msg::Odometry &odom);
-
     std::shared_ptr<rclcpp::Node> node;
 
     // Vehicle Motion
     VehicleModelBikePtr vehicle_model;
-    nav_msgs::msg::Odometry state_odom;
     Control input, output;
     State state;
     gz::math::Pose3d offset;
@@ -96,14 +82,10 @@ class VehiclePlugin : public gz::sim::System,
     // GZ Sim
     gz::sim::Entity _entity;
     gz::sim::Model _model;
-    std::chrono::steady_clock::duration last_sim_time, last_cmd_time, last_published_time;
+    std::chrono::steady_clock::duration last_sim_time;
 
-    // Rate to publish ros messages
+    // Rate to update vehicle dynamics
     double update_rate;
-    double publish_rate;
-
-    std::string odom_frame;
-    std::string base_frame;
 
     // ROS Publishers
     rclcpp::Publisher<sensor_msgs::msg::JointState>::SharedPtr joint_state_pub;

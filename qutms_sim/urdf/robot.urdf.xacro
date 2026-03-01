@@ -104,10 +104,6 @@
       </ros>
       <vehicle_params>$(find qutms_sim)/config/vehicle_params.yaml</vehicle_params>
       <update_rate>50.0</update_rate>
-      <publish_rate>50.0</publish_rate>
-      <map_frame>track</map_frame>
-      <odom_frame>track</odom_frame>
-      <base_frame>base_footprint</base_frame>
       <steering_lock_time>1.5</steering_lock_time>
     </plugin>
   </gazebo>

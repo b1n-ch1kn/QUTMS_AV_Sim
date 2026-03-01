@@ -58,7 +58,6 @@ void VehiclePlugin::Configure(
 
     // Initialize times
     last_sim_time = std::chrono::steady_clock::duration::zero();
-    last_published_time = std::chrono::steady_clock::duration::zero();
 
     RCLCPP_INFO(node->get_logger(), "GZ Sim VehiclePlugin Configured");
 }
@@ -77,13 +76,9 @@ void VehiclePlugin::initParams(const std::shared_ptr<const sdf::Element> &sdf) {
     
     // Get other parameters from SDF with defaults
     update_rate = sdf->Get<double>("update_rate", 50.0).first;
-    publish_rate = sdf->Get<double>("publish_rate", 50.0).first;
-    odom_frame = sdf->Get<std::string>("odom_frame", "track").first;
-    base_frame = sdf->Get<std::string>("base_frame", "base_footprint").first;
     steering_lock_time = sdf->Get<double>("steering_lock_time", 1.5).first;
     
-    RCLCPP_INFO(node->get_logger(), "Vehicle plugin params loaded: update_rate=%.1f, publish_rate=%.1f", 
-                update_rate, publish_rate);
+    RCLCPP_INFO(node->get_logger(), "Vehicle plugin params loaded: update_rate=%.1f", update_rate);
 }
 
 void VehiclePlugin::PreUpdate(const gz::sim::UpdateInfo &info,
@@ -99,7 +94,6 @@ void VehiclePlugin::PreUpdate(const gz::sim::UpdateInfo &info,
         
         first_update = false;
         last_sim_time = info.simTime;
-        last_published_time = info.simTime;
         return;
     }
 
@@ -120,52 +114,34 @@ void VehiclePlugin::setPositionFromWorld(gz::sim::EntityComponentManager &ecm) {
     RCLCPP_DEBUG(node->get_logger(), "Got starting offset %f %f %f", 
                 offset.Pos().X(), offset.Pos().Y(), offset.Pos().Z());
 
-    state_odom.header.frame_id = odom_frame;
-    state_odom.child_frame_id = base_frame;
-    state_odom.pose.pose.position.x = offset.Pos().X();
-    state_odom.pose.pose.position.y = offset.Pos().Y();
-    state_odom.pose.pose.position.z = offset.Pos().Z();
-
-    state_odom.pose.pose.orientation.x = offset.Rot().X();
-    state_odom.pose.pose.orientation.y = offset.Rot().Y();
-    state_odom.pose.pose.orientation.z = offset.Rot().Z();
-    state_odom.pose.pose.orientation.w = offset.Rot().W();
-
-    state_odom.twist.twist.linear.x = 0.0;
-    state_odom.twist.twist.linear.y = 0.0;
-    state_odom.twist.twist.linear.z = 0.0;
-
-    state_odom.twist.twist.angular.x = 0.0;
-    state_odom.twist.twist.angular.y = 0.0;
-    state_odom.twist.twist.angular.z = 0.0;
-
-    state = odomToState(state_odom);
+    // Initialize state directly from pose
+    state.x = offset.Pos().X();
+    state.y = offset.Pos().Y();
+    state.z = offset.Pos().Z();
+    state.yaw = offset.Rot().Yaw();
+    state.v_x = 0.0;
+    state.v_y = 0.0;
+    state.v_z = 0.0;
+    state.r_x = 0.0;
+    state.r_y = 0.0;
+    state.r_z = 0.0;
 }
 
 bool VehiclePlugin::resetVehiclePosition(
     std::shared_ptr<std_srvs::srv::Trigger::Request>,
     std::shared_ptr<std_srvs::srv::Trigger::Response> response) 
 {
-    state_odom.header.frame_id = odom_frame;
-    state_odom.child_frame_id = base_frame;
-    state_odom.pose.pose.position.x = offset.Pos().X();
-    state_odom.pose.pose.position.y = offset.Pos().Y();
-    state_odom.pose.pose.position.z = offset.Pos().Z();
-
-    state_odom.pose.pose.orientation.x = offset.Rot().X();
-    state_odom.pose.pose.orientation.y = offset.Rot().Y();
-    state_odom.pose.pose.orientation.z = offset.Rot().Z();
-    state_odom.pose.pose.orientation.w = offset.Rot().W();
-
-    state_odom.twist.twist.linear.x = 0.0;
-    state_odom.twist.twist.linear.y = 0.0;
-    state_odom.twist.twist.linear.z = 0.0;
-
-    state_odom.twist.twist.angular.x = 0.0;
-    state_odom.twist.twist.angular.y = 0.0;
-    state_odom.twist.twist.angular.z = 0.0;
-
-    state = odomToState(state_odom);
+    // Reset state directly to initial pose
+    state.x = offset.Pos().X();
+    state.y = offset.Pos().Y();
+    state.z = offset.Pos().Z();
+    state.yaw = offset.Rot().Yaw();
+    state.v_x = 0.0;
+    state.v_y = 0.0;
+    state.v_z = 0.0;
+    state.r_x = 0.0;
+    state.r_y = 0.0;
+    state.r_z = 0.0;
     
     // Note: Control commands are now handled by the vehicle_control_plugin
     // Vehicle will stop naturally when no commands are received
@@ -218,38 +194,6 @@ void VehiclePlugin::setModelState(gz::sim::EntityComponentManager &ecm) {
     }
 }
 
-nav_msgs::msg::Odometry VehiclePlugin::stateToOdom(const State &state, const rclcpp::Time &stamp) {
-    nav_msgs::msg::Odometry msg;
-    msg.header.stamp = stamp;
-    msg.header.frame_id = odom_frame;
-    msg.child_frame_id = base_frame;
-
-    msg.pose.pose.position.x = state.x;
-    msg.pose.pose.position.y = state.y;
-
-    std::vector<double> orientation = {0.0, 0.0, state.yaw};
-    msg.pose.pose.orientation = to_quaternion(orientation);
-
-    msg.twist.twist.linear.x = state.v_x;
-    msg.twist.twist.linear.y = state.v_y;
-    msg.twist.twist.angular.z = state.r_z;
-
-    return msg;
-}
-
-State VehiclePlugin::odomToState(const nav_msgs::msg::Odometry &odom) {
-    State state;
-    state.x = odom.pose.pose.position.x;
-    state.y = odom.pose.pose.position.y;
-    geometry_msgs::msg::Quaternion q = odom.pose.pose.orientation;
-    state.yaw = to_euler(q)[2];
-    state.v_x = odom.twist.twist.linear.x;
-    state.v_y = odom.twist.twist.linear.y;
-    state.r_z = odom.twist.twist.angular.z;
-
-    return state;
-}
-
 void VehiclePlugin::update(const gz::sim::UpdateInfo &info, 
                            gz::sim::EntityComponentManager &ecm) 
 {
@@ -276,8 +220,7 @@ void VehiclePlugin::update(const gz::sim::UpdateInfo &info,
         input.steering = 0.0;
     }
 
-    double current_speed = std::sqrt(std::pow(state_odom.twist.twist.linear.x, 2) + 
-                                    std::pow(state_odom.twist.twist.linear.y, 2));
+    double current_speed = std::sqrt(std::pow(state.v_x, 2) + std::pow(state.v_y, 2));
     output.acceleration = (input.velocity - current_speed) / dt;
 
     // Make sure steering rate is within limits
@@ -334,20 +277,6 @@ void VehiclePlugin::update(const gz::sim::UpdateInfo &info,
     joint_state_pub->publish(joint_state);
 
     setModelState(ecm);
-
-    // Check publish rate
-    auto time_since_last_published_duration = info.simTime - last_published_time;
-    double time_since_last_published = std::chrono::duration<double>(time_since_last_published_duration).count();
-    
-    if (time_since_last_published < (1.0 / publish_rate)) {
-        return;
-    }
-    last_published_time = info.simTime;
-
-    // Convert sim time to ROS time for publishing
-    rclcpp::Time publish_time(std::chrono::duration_cast<std::chrono::nanoseconds>(info.simTime).count());
-    state_odom = stateToOdom(state, publish_time);
-
 }
 
 
