@@ -7,7 +7,7 @@
   <!--  Get the parameters  -->
   <xacro:arg name="base_frame" default="base_link"/>
   <xacro:arg name="display_car" default="true"/>
-  <!-- <xacro:arg name="namespace" default="sim"/> -->
+  <xacro:arg name="namespace" default="sim"/>
 
   <!-- Imports -->
   <xacro:include filename="$(find qutms_sim)/urdf/wheels.urdf.xacro"/>
@@ -170,6 +170,55 @@
       <lidar_offset_x>1.59</lidar_offset_x>
       <lidar_offset_z>0.25</lidar_offset_z>
       <base_frame>base_footprint</base_frame>
+    </plugin>
+  </gazebo>
+
+  <!-- ROS 2 Control Integration - State Interfaces Only -->
+  <!-- Uses gz_ros2_control to read joint states and publish via joint_state_broadcaster -->
+  <!-- No command interfaces = no ownership conflict with kinematic vehicle control -->
+  <ros2_control name="GazeboSimSystem" type="system">
+    <hardware>
+      <plugin>gz_ros2_control/GazeboSimSystem</plugin>
+    </hardware>
+    
+    <!-- Steering joints - state only (vehicle plugin controls via JointPositionReset) -->
+    <joint name="left_steering_hinge_joint">
+      <state_interface name="position" />
+      <state_interface name="velocity" />
+    </joint>
+    <joint name="right_steering_hinge_joint">
+      <state_interface name="position" />
+      <state_interface name="velocity" />
+    </joint>
+    
+    <!-- Wheel joints - state only for TF publishing -->
+    <joint name="front_left_wheel_joint">
+      <state_interface name="position" />
+      <state_interface name="velocity" />
+    </joint>
+    <joint name="front_right_wheel_joint">
+      <state_interface name="position" />
+      <state_interface name="velocity" />
+    </joint>
+    <joint name="rear_left_wheel_joint">
+      <state_interface name="position" />
+      <state_interface name="velocity" />
+    </joint>
+    <joint name="rear_right_wheel_joint">
+      <state_interface name="position" />
+      <state_interface name="velocity" />
+    </joint>
+  </ros2_control>
+
+  <gazebo>
+    <!-- gz_ros2_control plugin - reads joint states from simulation -->
+    <!-- joint_state_broadcaster publishes to /sim/joint_states for robot_state_publisher -->
+    <plugin filename="gz_ros2_control-system" 
+            name="gz_ros2_control::GazeboSimROS2ControlPlugin">
+      <parameters>$(find qutms_sim)/config/ros2_controllers.yaml</parameters>
+      <ros>
+        <namespace>/$(arg namespace)</namespace>
+      </ros>
     </plugin>
   </gazebo>
 

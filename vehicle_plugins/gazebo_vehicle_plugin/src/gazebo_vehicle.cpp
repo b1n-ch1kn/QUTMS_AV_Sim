@@ -49,9 +49,9 @@ void VehiclePlugin::Configure(
     initParams(sdf);
 
     // ROS Publishers
-    // Publish to /sim/joint_states to match robot_state_publisher subscription
-    // Note: Node is created without namespace, so we use absolute path
-    joint_state_pub = node->create_publisher<sensor_msgs::msg::JointState>("/sim/joint_states", 10);
+    // NOTE: Joint states now published by gz_ros2_control joint_state_broadcaster
+    // We no longer publish manually - gz_ros2_control reads joint positions from ECM
+    // and publishes all joints to /sim/joint_states for robot_state_publisher
     
     // ROS Services
     reset_vehicle_pos_srv = node->create_service<std_srvs::srv::Trigger>(
@@ -295,17 +295,9 @@ void VehiclePlugin::update(const gz::sim::UpdateInfo &info,
         }
     }
 
-    // Publish joint states to standard /joint_states topic
-    // This maintains compatibility with robot_state_publisher and RViz
-    rclcpp::Time current_time(std::chrono::duration_cast<std::chrono::nanoseconds>(info.simTime).count());
-    
-    sensor_msgs::msg::JointState joint_state;
-    joint_state.header.stamp = current_time;
-    joint_state.name.push_back("left_steering_hinge_joint");
-    joint_state.name.push_back("right_steering_hinge_joint");
-    joint_state.position.push_back(output.steering);
-    joint_state.position.push_back(output.steering);
-    joint_state_pub->publish(joint_state);
+    // Joint positions set via JointPositionReset above
+    // gz_ros2_control reads these from ECM and publishes via joint_state_broadcaster
+    // Flow: JointPositionReset → Physics → JointPosition (state) → gz_ros2_control → /sim/joint_states
 
     setModelState(ecm);
 }

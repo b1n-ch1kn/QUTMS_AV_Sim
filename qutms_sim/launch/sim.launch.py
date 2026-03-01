@@ -83,6 +83,7 @@ def spawn_car(context, *args, **kwargs):
 
     xacro_path = join(sim_pkg, "urdf", "robot.urdf.xacro")
     urdf_path = join(sim_pkg, "urdf", "robot.urdf")
+    controller_config = join(sim_pkg, "config", "ros2_controllers.yaml")
 
     if not isfile(urdf_path):
         os.mknod(urdf_path)
@@ -148,6 +149,20 @@ def spawn_car(context, *args, **kwargs):
             ],
             arguments=["--ros-args", "--log-level", "warn"],
         ),
+        # Controller spawner - loads and activates joint_state_broadcaster
+        TimerAction(period=3.0, actions=[
+            Node(
+                package="controller_manager",
+                executable="spawner",
+                namespace=namespace,
+                output="screen",
+                arguments=[
+                    "joint_state_broadcaster",
+                    "--param-file",
+                    controller_config,
+                ],
+            ),
+        ]),
         Node(
             package="ros_gz_bridge",
             executable="parameter_bridge",

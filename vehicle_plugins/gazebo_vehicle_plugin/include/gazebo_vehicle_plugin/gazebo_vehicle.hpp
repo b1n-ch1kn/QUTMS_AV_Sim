@@ -14,9 +14,6 @@
 // ROS Includes
 #include "rclcpp/rclcpp.hpp"
 
-// ROS msgs
-#include "sensor_msgs/msg/joint_state.hpp"
-
 // ROS srvs
 #include <std_srvs/srv/trigger.hpp>
 
@@ -86,9 +83,6 @@ class VehiclePlugin : public gz::sim::System,
 
     // Rate to update vehicle dynamics
     double update_rate;
-
-    // ROS Publishers
-    rclcpp::Publisher<sensor_msgs::msg::JointState>::SharedPtr joint_state_pub;
 
     // ROS Services
     rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr reset_vehicle_pos_srv;

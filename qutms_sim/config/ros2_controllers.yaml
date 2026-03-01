@@ -1,0 +1,13 @@
+/**:
+  controller_manager:
+    ros__parameters:
+      update_rate: 50  # Hz - matches our other plugin update rates
+
+      # Joint State Broadcaster - publishes joint states to /joint_states
+      joint_state_broadcaster:
+        type: joint_state_broadcaster/JointStateBroadcaster
+
+# Future controllers can be added here as we migrate to physics-based control:
+# - Ackermann steering controller
+# - Wheel velocity controllers
+# - Force/torque controllers for physics-based dynamics
