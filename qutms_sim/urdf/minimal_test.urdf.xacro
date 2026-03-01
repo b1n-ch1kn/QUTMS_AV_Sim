@@ -1,0 +1,300 @@
+<?xml version="1.0"?>
+<!-- Minimal test URDF based on working gz_ros2_control_demos example -->
+<!-- Uses demo structure with our vehicle dimensions -->
+<robot name="qutms_minimal" xmlns:xacro="http://ros.org/wiki/xacro">
+  
+  <!-- Our vehicle dimensions -->
+  <xacro:property name="wheelbase" value="1.580"/>
+  <xacro:property name="track_width" value="1.400"/>
+  <xacro:property name="wheel_radius" value="0.2032"/>
+  <xacro:property name="wheel_width" value="0.2"/>
+  
+  <!-- Friction coefficient - test different values (2, 10, 50, 100) -->
+  <xacro:property name="wheel_friction_mu" value="2"/>
+  
+  <!-- Demo-style masses (start simple) -->
+  <!-- Phase 1 Test: Real vehicle masses -->
+  <xacro:property name="chassis_mass" value="235"/>  <!-- Our real mass: 235kg -->
+  <xacro:property name="wheel_mass" value="3.0"/>    <!-- Our real mass: 3kg per wheel -->
+  <xacro:property name="steering_mass" value="1.0"/>  <!-- Our real mass: 1kg steering hinge -->
+  
+  <material name="Black">
+    <color rgba="0 0 0 1" />
+  </material>
+  <material name="Orange">
+    <color rgba="1 0.6 0 1" />
+  </material>
+
+  <!-- Base footprint (TF reference frame) -->
+  <link name="base_footprint" />
+  
+  <joint name="base_footprint_joint" type="fixed">
+    <origin xyz="0 0 ${wheel_radius}" rpy="0 0 0" />
+    <parent link="base_footprint" />
+    <child link="chassis" />
+  </joint>
+
+  <!-- Chassis -->
+  <link name="chassis">
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <box size="${wheelbase} ${track_width} 0.3" />
+      </geometry>
+    </collision>
+
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <box size="${wheelbase} ${track_width} 0.3" />
+      </geometry>
+      <material name="Orange" />
+    </visual>
+
+    <inertial>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <mass value="${chassis_mass}" />
+      <inertia ixx="10.4" ixy="0.0" ixz="0.0" iyy="35.4" iyz="0.0" izz="41.66" />
+    </inertial>
+  </link>
+
+
+  <!-- ========================================= -->
+  <!-- REAR WHEELS (TRACTION) -->
+  <!-- ========================================= -->
+  
+  <!-- Rear Left Wheel -->
+  <link name="rear_left_wheel">
+    <collision>
+      <geometry>
+        <cylinder length="${wheel_width}" radius="${wheel_radius}" />
+      </geometry>
+      <surface>
+        <friction>
+          <ode>
+            <mu>${wheel_friction_mu}</mu>
+            <mu2>${wheel_friction_mu}</mu2>
+          </ode>
+        </friction>
+      </surface>
+    </collision>
+    <visual>
+      <geometry>
+        <cylinder length="${wheel_width}" radius="${wheel_radius}" />
+      </geometry>
+      <material name="Black" />
+    </visual>
+    <inertial>
+      <mass value="${wheel_mass}" />
+      <inertia ixx="0.26" ixy="0.0" ixz="0.0" iyy="0.26" iyz="0.0" izz="0.51" />
+    </inertial>
+  </link>
+
+  <joint name="rear_left_wheel_joint" type="continuous">
+    <origin xyz="${-wheelbase/2} ${track_width/2} 0" rpy="-1.57 0 0" />
+    <parent link="chassis" />
+    <child link="rear_left_wheel" />
+    <axis xyz="0 0 1" />
+    <dynamics damping="0.2" />
+  </joint>
+
+  <!-- Rear Right Wheel -->
+  <link name="rear_right_wheel">
+    <collision>
+      <geometry>
+        <cylinder length="${wheel_width}" radius="${wheel_radius}" />
+      </geometry>
+      <surface>
+        <friction>
+          <ode>
+            <mu>${wheel_friction_mu}</mu>
+            <mu2>${wheel_friction_mu}</mu2>
+          </ode>
+        </friction>
+      </surface>
+    </collision>
+    <visual>
+      <geometry>
+        <cylinder length="${wheel_width}" radius="${wheel_radius}" />
+      </geometry>
+      <material name="Black" />
+    </visual>
+    <inertial>
+      <mass value="${wheel_mass}" />
+      <inertia ixx="0.26" ixy="0.0" ixz="0.0" iyy="0.26" iyz="0.0" izz="0.51" />
+    </inertial>
+  </link>
+
+  <joint name="rear_right_wheel_joint" type="continuous">
+    <origin xyz="${-wheelbase/2} ${-track_width/2} 0" rpy="-1.57 0 0" />
+    <parent link="chassis" />
+    <child link="rear_right_wheel" />
+    <axis xyz="0 0 1" />
+    <dynamics damping="0.2" />
+  </joint>
+
+  <!-- ========================================= -->
+  <!-- FRONT WHEELS (STEERING) -->
+  <!-- ========================================= -->
+  
+  <!-- Left Steering Hinge -->
+  <link name="left_steering_hinge">
+    <inertial>
+      <mass value="${steering_mass}"/>
+      <inertia ixx="0.001" ixy="0.0" ixz="0.0" iyy="0.001" iyz="0.0" izz="0.002" />
+    </inertial>
+  </link>
+
+  <joint name="left_steering_hinge_joint" type="revolute">
+    <origin xyz="${wheelbase/2} ${track_width/2} 0" rpy="0 0 0" />
+    <parent link="chassis" />
+    <child link="left_steering_hinge" />
+    <axis xyz="0 0 1" />
+    <dynamics damping="0.2" />
+    <limit effort="1000.0" lower="-1.57" upper="1.57" velocity="30"/>
+  </joint>
+
+  <!-- Right Steering Hinge -->
+  <link name="right_steering_hinge">
+    <inertial>
+      <mass value="${steering_mass}"/>
+      <inertia ixx="0.001" ixy="0.0" ixz="0.0" iyy="0.001" iyz="0.0" izz="0.002" />
+    </inertial>
+  </link>
+
+  <joint name="right_steering_hinge_joint" type="revolute">
+    <origin xyz="${wheelbase/2} ${-track_width/2} 0" rpy="0 0 0" />
+    <parent link="chassis" />
+    <child link="right_steering_hinge" />
+    <axis xyz="0 0 1" />
+    <dynamics damping="0.2" />
+    <limit effort="1000.0" lower="-1.57" upper="1.57" velocity="30"/>
+  </joint>
+
+  <!-- Front Left Wheel -->
+  <link name="front_left_wheel">
+    <collision>
+      <geometry>
+        <cylinder length="${wheel_width}" radius="${wheel_radius}" />
+      </geometry>
+      <surface>
+        <friction>
+          <ode>
+            <mu>${wheel_friction_mu}</mu>
+            <mu2>${wheel_friction_mu}</mu2>
+          </ode>
+        </friction>
+      </surface>
+    </collision>
+    <visual>
+      <geometry>
+        <cylinder length="${wheel_width}" radius="${wheel_radius}" />
+      </geometry>
+      <material name="Black" />
+    </visual>
+    <inertial>
+      <mass value="${wheel_mass}" />
+      <inertia ixx="0.26" ixy="0.0" ixz="0.0" iyy="0.26" iyz="0.0" izz="0.51" />
+    </inertial>
+  </link>
+
+  <joint name="front_left_wheel_joint" type="continuous">
+    <origin xyz="0 0 0" rpy="-1.57 0 0" />
+    <parent link="left_steering_hinge" />
+    <child link="front_left_wheel" />
+    <axis xyz="0 0 1" />
+    <dynamics damping="0.2" />
+  </joint>
+
+  <!-- Front Right Wheel -->
+  <link name="front_right_wheel">
+    <collision>
+      <geometry>
+        <cylinder length="${wheel_width}" radius="${wheel_radius}" />
+      </geometry>
+      <surface>
+        <friction>
+          <ode>
+            <mu>${wheel_friction_mu}</mu>
+            <mu2>${wheel_friction_mu}</mu2>
+          </ode>
+        </friction>
+      </surface>
+    </collision>
+    <visual>
+      <geometry>
+        <cylinder length="${wheel_width}" radius="${wheel_radius}" />
+      </geometry>
+      <material name="Black" />
+    </visual>
+    <inertial>
+      <mass value="${wheel_mass}" />
+      <inertia ixx="0.26" ixy="0.0" ixz="0.0" iyy="0.26" iyz="0.0" izz="0.51" />
+    </inertial>
+  </link>
+
+  <joint name="front_right_wheel_joint" type="continuous">
+    <origin xyz="0 0 0" rpy="-1.57 0 0" />
+    <parent link="right_steering_hinge" />
+    <child link="front_right_wheel" />
+    <axis xyz="0 0 1" />
+    <dynamics damping="0.2" />
+  </joint>
+
+  <!-- ========================================= -->
+  <!-- ROS2 CONTROL - EXACT DEMO STRUCTURE -->
+  <!-- ========================================= -->
+  
+  <ros2_control name="GazeboSystem" type="system">
+    <hardware>
+      <plugin>gz_ros2_control/GazeboSimSystem</plugin>
+    </hardware>
+    
+    <!-- Rear wheels - velocity command only (like demo) -->
+    <joint name="rear_left_wheel_joint">
+      <command_interface name="velocity" />
+      <state_interface name="velocity" />
+      <state_interface name="position" />
+    </joint>
+    
+    <joint name="rear_right_wheel_joint">
+      <command_interface name="velocity" />
+      <state_interface name="velocity" />
+      <state_interface name="position" />
+    </joint>
+    
+    <!-- Steering joints - position command (like demo) -->
+    <joint name="left_steering_hinge_joint">
+      <command_interface name="position" />
+      <state_interface name="position" />
+      <state_interface name="velocity" />
+    </joint>
+    
+    <joint name="right_steering_hinge_joint">
+      <command_interface name="position" />
+      <state_interface name="position" />
+      <state_interface name="velocity" />
+    </joint>
+    
+    <!-- Front wheels - state feedback only (like demo) -->
+    <joint name="front_left_wheel_joint">
+      <state_interface name="position" />
+      <state_interface name="velocity" />
+    </joint>
+    
+    <joint name="front_right_wheel_joint">
+      <state_interface name="position" />
+      <state_interface name="velocity" />
+    </joint>
+  </ros2_control>
+
+  <!-- Gazebo plugin -->
+  <gazebo>
+    <plugin filename="gz_ros2_control-system" name="gz_ros2_control::GazeboSimROS2ControlPlugin">
+      <robot_param>robot_description</robot_param>
+      <robot_param_node>robot_state_publisher</robot_param_node>
+      <parameters>$(find qutms_sim)/config/minimal_controllers.yaml</parameters>
+    </plugin>
+  </gazebo>
+
+</robot>

@@ -55,7 +55,7 @@ def load_world(context, *args, **kwargs):
         # Use custom track world
         track = str(get_argument(context, "track") + ".sdf")
         world_path = join(sim_pkg, "worlds", track)
-        gz_args = f"-r {world_path} -s"
+        gz_args = f"-r -v 1 {world_path}"
 
     gz_launch_path = join(get_package_share_directory("ros_gz_sim"), "launch", "gz_sim.launch.py")
     
@@ -93,7 +93,7 @@ def load_car(context, *args, **kwargs):
     display_car = get_argument(context, "display_car")
     namespace = get_argument(context, "namespace")
 
-    xacro_path = join(sim_pkg, "urdf", "robot.urdf.xacro")
+    xacro_path = join(sim_pkg, "urdf", "minimal_test.urdf.xacro")
     urdf_path = join(sim_pkg, "urdf", "robot.urdf")
 
     if not isfile(urdf_path):
@@ -185,8 +185,7 @@ def load_car(context, *args, **kwargs):
 
     ### ROS2 Control setup ###
 
-    controller_config = join(sim_pkg, "config", "ros2_controllers.yaml")
-    controller_yaml = parse_yaml(controller_config)["/**"]
+    controller_config = join(sim_pkg, "config", "minimal_controllers.yaml")
     
     # Only spawn Ackermann controller and joint_state_broadcaster
     # Based on working gz_ros2_control_demos/ackermann_drive_example
@@ -313,7 +312,7 @@ def generate_launch_description():
             ),
             DeclareLaunchArgument(
                 name="use_empty_world",
-                default_value="true",
+                default_value="false",
                 description="Use empty.sdf world instead of custom track (for testing)",
             ),
             OpaqueFunction(function=load_visuals),
