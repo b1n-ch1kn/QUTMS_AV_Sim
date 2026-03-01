@@ -16,7 +16,7 @@
 namespace gazebo_plugins {
 namespace vehicle_plugins {
 
-SimResetPlugin::SimResetPlugin() : first_update(true), ecm_ptr(nullptr) {}
+SimResetPlugin::SimResetPlugin() : first_update(true), reset_requested(false) {}
 
 SimResetPlugin::~SimResetPlugin() {}
 
@@ -46,9 +46,6 @@ void SimResetPlugin::Configure(
 
     this->node = std::make_shared<rclcpp::Node>("sim_reset_plugin_node");
     RCLCPP_INFO(this->node->get_logger(), "Created ROS node inside SimResetPlugin.");
-
-    // Store ECM pointer for reset service
-    ecm_ptr = &ecm;
 
     // Initialize parameters from SDF
     initParams(sdf);
@@ -83,43 +80,45 @@ void SimResetPlugin::PreUpdate(const gz::sim::UpdateInfo &info,
                        vehicle_initial_pose.Pos().Z());
         }
 
-        // Find track model by name
+        // Find all cone models in the world
+        // Cones are nested models (included via <include> in track model)
+        // For nested models, we must use canonical links, not model entities
         ecm.Each<gz::sim::components::Model, gz::sim::components::Name>(
             [&](const gz::sim::Entity &entity,
                 const gz::sim::components::Model *,
                 const gz::sim::components::Name *name) -> bool {
-                if (name->Data() == "track") {
-                    track_model = entity;
-                    RCLCPP_INFO(node->get_logger(), "Found track model entity: %lu", track_model);
-                    return false; // Stop searching
+                std::string model_name = name->Data();
+                // Check if this is a cone model (blue_cone_*, yellow_cone_*, etc.) but not the track
+                if (model_name.find("cone") != std::string::npos && model_name != "track") {
+                    // Get the canonical link (first link) of this cone model
+                    // WorldPoseCmd works on links for nested models
+                    gz::sim::Model cone_model(entity);
+                    auto links = cone_model.Links(ecm);
+                    if (!links.empty()) {
+                        gz::sim::Entity canonical_link = links[0];
+                        cone_canonical_links.push_back(canonical_link);
+                        
+                        // Store initial pose using worldPose utility
+                        gz::math::Pose3d conePose = gz::sim::worldPose(canonical_link, ecm);
+                        cone_initial_poses.push_back(conePose);
+                    }
                 }
-                return true; // Continue searching
+                return true; // Continue searching all models
             });
-
-        if (track_model == gz::sim::kNullEntity) {
-            RCLCPP_WARN(node->get_logger(), 
-                       "Could not find track model. Cone reset will be unavailable.");
-        } else {
-            // Get all cone links and their initial poses
-            gz::sim::Model track(track_model);
-            auto links = track.Links(ecm);
-            
-            for (const auto &link : links) {
-                auto linkName = ecm.Component<gz::sim::components::Name>(link);
-                if (linkName && linkName->Data().find("cone") != std::string::npos) {
-                    cone_links.push_back(link);
-                    
-                    // Store initial pose
-                    gz::math::Pose3d conePose = gz::sim::worldPose(link, ecm);
-                    cone_initial_poses.push_back(conePose);
-                }
-            }
-            
-            RCLCPP_INFO(node->get_logger(), "Stored %zu cone initial poses", cone_initial_poses.size());
-        }
+        
+        RCLCPP_INFO(node->get_logger(), "Stored %zu cone initial poses", cone_initial_poses.size());
 
         first_update = false;
         return;
+    }
+
+    // Handle reset request
+    if (reset_requested) {
+        RCLCPP_INFO(node->get_logger(), "Applying simulation reset...");
+        resetVehicle(ecm);
+        resetCones(ecm);
+        reset_requested = false;
+        RCLCPP_INFO(node->get_logger(), "Simulation reset applied");
     }
 
     // Spin ROS callbacks
@@ -132,26 +131,13 @@ bool SimResetPlugin::resetSimulation(
 {
     (void)request; // Unused
     
-    if (!ecm_ptr) {
-        response->success = false;
-        response->message = "ECM not available";
-        RCLCPP_ERROR(node->get_logger(), "Reset failed: ECM not available");
-        return false;
-    }
-
-    auto &ecm = *ecm_ptr;
-    
-    RCLCPP_INFO(node->get_logger(), "Resetting simulation...");
-    
-    // Reset vehicle
-    resetVehicle(ecm);
-    
-    // Reset cones
-    resetCones(ecm);
+    // Set flag to trigger reset in next PreUpdate cycle
+    // This ensures ECM modifications happen during the proper phase
+    reset_requested = true;
     
     response->success = true;
-    response->message = "Simulation reset successfully";
-    RCLCPP_INFO(node->get_logger(), "Simulation reset complete");
+    response->message = "Simulation reset requested";
+    RCLCPP_INFO(node->get_logger(), "Simulation reset requested (will apply in next update)");
     
     return true;
 }
@@ -219,7 +205,7 @@ void SimResetPlugin::resetVehicle(gz::sim::EntityComponentManager &ecm)
 
 void SimResetPlugin::resetCones(gz::sim::EntityComponentManager &ecm)
 {
-    if (cone_links.empty() || cone_initial_poses.empty()) {
+    if (cone_canonical_links.empty() || cone_initial_poses.empty()) {
         RCLCPP_DEBUG(node->get_logger(), "No cones to reset");
         return;
     }
@@ -227,37 +213,48 @@ void SimResetPlugin::resetCones(gz::sim::EntityComponentManager &ecm)
     // Zero velocity
     const gz::math::Vector3d zero_vel(0.0, 0.0, 0.0);
 
-    // Loop through all cones and reset to initial positions
-    for (size_t i = 0; i < cone_links.size() && i < cone_initial_poses.size(); i++) {
-        gz::sim::Entity cone_link = cone_links[i];
+    // Loop through all cone canonical links and reset to initial positions
+    for (size_t i = 0; i < cone_canonical_links.size() && i < cone_initial_poses.size(); i++) {
+        gz::sim::Entity cone_link = cone_canonical_links[i];
         gz::math::Pose3d initial_pose = cone_initial_poses[i];
 
-        // Set cone position using ECM (using world pose for accuracy)
+        // For static/dynamic bodies, use Pose component and enable it to trigger physics update
         auto poseComp = ecm.Component<gz::sim::components::Pose>(cone_link);
         if (poseComp) {
             *poseComp = gz::sim::components::Pose(initial_pose);
         } else {
             ecm.CreateComponent(cone_link, gz::sim::components::Pose(initial_pose));
         }
+        
+        // Also try WorldPoseCmd in case physics system needs it
+        auto worldPoseCmd = ecm.Component<gz::sim::components::WorldPoseCmd>(cone_link);
+        if (worldPoseCmd) {
+            *worldPoseCmd = gz::sim::components::WorldPoseCmd(initial_pose);
+        } else {
+            ecm.CreateComponent(cone_link, gz::sim::components::WorldPoseCmd(initial_pose));
+        }
 
         // Set linear velocity to zero
-        auto linVelComp = ecm.Component<gz::sim::components::LinearVelocity>(cone_link);
-        if (linVelComp) {
-            *linVelComp = gz::sim::components::LinearVelocity(zero_vel);
+        auto linVelCmd = ecm.Component<gz::sim::components::WorldLinearVelocityCmd>(cone_link);
+        if (linVelCmd) {
+            *linVelCmd = gz::sim::components::WorldLinearVelocityCmd(zero_vel);
         } else {
-            ecm.CreateComponent(cone_link, gz::sim::components::LinearVelocity(zero_vel));
+            ecm.CreateComponent(cone_link, gz::sim::components::WorldLinearVelocityCmd(zero_vel));
         }
 
         // Set angular velocity to zero
-        auto angVelComp = ecm.Component<gz::sim::components::AngularVelocity>(cone_link);
-        if (angVelComp) {
-            *angVelComp = gz::sim::components::AngularVelocity(zero_vel);
+        auto angVelCmd = ecm.Component<gz::sim::components::WorldAngularVelocityCmd>(cone_link);
+        if (angVelCmd) {
+            *angVelCmd = gz::sim::components::WorldAngularVelocityCmd(zero_vel);
         } else {
-            ecm.CreateComponent(cone_link, gz::sim::components::AngularVelocity(zero_vel));
+            ecm.CreateComponent(cone_link, gz::sim::components::WorldAngularVelocityCmd(zero_vel));
         }
+        
+        // Enable the component to signal the physics system
+        ecm.SetChanged(cone_link, gz::sim::components::Pose::typeId, gz::sim::ComponentState::OneTimeChange);
     }
 
-    RCLCPP_DEBUG(node->get_logger(), "Reset %zu cones to initial positions", cone_links.size());
+    RCLCPP_INFO(node->get_logger(), "Reset %zu cones to initial positions", cone_canonical_links.size());
 }
 
 }  // namespace vehicle_plugins

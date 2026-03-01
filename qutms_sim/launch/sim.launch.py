@@ -187,9 +187,14 @@ def load_car(context, *args, **kwargs):
 
     controllers = []
     # Controller spawners - sequentially load and activate controllers
-    for name in controller_names:
+    # Stagger spawning to avoid overwhelming controller_manager
+    base_delay = 5.0
+    delay_increment = 2.0  # 2 seconds between each controller spawn
+
+    for idx, name in enumerate(controller_names):
+        spawn_delay = base_delay + (idx * delay_increment)
         controllers.append(
-            TimerAction(period=3.0, actions=[
+            TimerAction(period=spawn_delay, actions=[
                 Node(
                     package="controller_manager",
                     executable="spawner",

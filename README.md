@@ -232,7 +232,7 @@ Edit [qutms_sim/urdf/gz_plugins.urdf.xacro](qutms_sim/urdf/gz_plugins.urdf.xacro
 - `/ackermann_steering_controller/tf_odometry` - TF-based odometry
 
 ### Services
-- `/reset_simulation` - Reset vehicle and cones to starting positions
+- `/reset_simulation` - Reset vehicle to starting position (⚠️ cone reset currently not working, see [Known Issues](#known-issues))
 
 ## Sending Commands
 
@@ -612,6 +612,35 @@ gz sim --version
 - 📋 Advanced weather/lighting conditions
 - 📋 Trajectory visualization tools
 - 📋 Automated testing framework
+
+## Known Issues
+
+### Cone Reset Not Working
+
+**Issue:** The `/reset_simulation` service successfully resets the vehicle to its initial position, but cones do not return to their starting positions.
+
+**Status:** Under investigation
+
+**Current Behavior:**
+- ✅ Vehicle resets correctly (pose and velocities)
+- ✅ Service detects all 77 cones
+- ❌ Cone positions do not update in simulation
+
+**Technical Details:**
+The cone reset attempts to use `WorldPoseCmd` components on nested model links, but GZ Sim Harmonic's physics system appears to ignore these commands for included/nested models. The issue may require:
+- Using a different component type for nested models
+- Direct physics engine API calls
+- Restructuring how cones are included in the world
+
+**Workaround:** Restart the simulation to reset cone positions:
+```bash
+# Stop current sim (Ctrl+C)
+ros2 launch qutms_sim sim.launch.py
+```
+
+**Tracking:** See [TODO.md](./TODO.md#known-issues) for updates
+
+---
 
 ## Support
 

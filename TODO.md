@@ -43,6 +43,23 @@
 1. **Physics-Based** (Active): Ackermann controller → wheel velocities → physics engine
 2. **Kinematic** (Disabled): Direct pose commands → bypass physics (faster, simpler)
 
+### Known Issues ⚠️
+
+**Cone Reset Bug**
+- **Status:** Under Investigation
+- **Symptom:** `/reset_simulation` service resets vehicle correctly but cones remain in current positions
+- **Impact:** Low - Vehicle reset works, cone reset is nice-to-have for testing
+- **Detection:** Service finds all 77 cones, creates WorldPoseCmd components, but physics system doesn't process updates
+- **Root Cause:** GZ Sim Harmonic appears to ignore WorldPoseCmd on nested model links (cones are `<include>`'d in track model)
+- **Attempted Fixes:**
+  - ✅ Changed from model entities to canonical links
+  - ✅ Added SetChanged() to mark components as modified
+  - ✅ Applied reset during PreUpdate phase (not service callback)
+  - ✅ Set both Pose and WorldPoseCmd components
+  - ❌ None successful
+- **Workaround:** Restart simulation to reset cone positions
+- **Next Steps:** May require direct physics API access or restructuring cone inclusion method
+
 ---
 
 ## Phase 1: Core Jazzy Migration (Completed ✅)

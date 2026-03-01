@@ -49,19 +49,18 @@ private:
     // Entity tracking
     gz::sim::Entity _entity;
     gz::sim::Model _model;
-    gz::sim::Entity track_model;
     
     // Initial states
     gz::math::Pose3d vehicle_initial_pose;
     std::vector<gz::math::Pose3d> cone_initial_poses;
-    std::vector<gz::sim::Entity> cone_links;
+    std::vector<gz::sim::Entity> cone_canonical_links;
     
     // Configuration
     std::string vehicle_base_frame;
     
     // State
     bool first_update;
-    gz::sim::EntityComponentManager* ecm_ptr;
+    bool reset_requested;
 };
 
 }  // namespace vehicle_plugins
