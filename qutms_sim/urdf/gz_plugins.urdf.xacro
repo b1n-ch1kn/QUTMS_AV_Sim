@@ -25,38 +25,52 @@
 
   <xacro:arg name="namespace" default="sim"/>
 
-  <!-- Vehicle Dynamics Plugin - DISABLED for ROS 2 Control Testing -->
-  <!-- 
-    IMPORTANT: This plugin uses WorldPoseCmd for kinematic control, which conflicts
-    with physics-based ROS 2 Control. Uncomment this to use custom vehicle control.
-    
-  <gazebo>
-    <plugin filename="libgazebo_vehicle.so" name="gazebo_plugins::vehicle_plugins::VehiclePlugin">
-      <ros>
-        <namespace>/$(arg namespace)</namespace>
-      </ros>
-      <vehicle_params>$(find qutms_sim)/config/vehicle_params.yaml</vehicle_params>
-      <update_rate>50.0</update_rate>
-      <steering_lock_time>1.5</steering_lock_time>
-    </plugin>
-  </gazebo>
-  -->
-
-  <!-- Vehicle Control Plugin - DISABLED (requires vehicle dynamics plugin) -->
   <!--
-  <gazebo>
-    <plugin filename="libgazebo_vehicle_control.so" name="gazebo_plugins::vehicle_plugins::VehicleControlPlugin">
-      <ros>
-        <namespace>/$(arg namespace)</namespace>
-      </ros>
-      <control_delay>0.035</control_delay>
-      <enable_ackermann>true</enable_ackermann>
-      <enable_twist>true</enable_twist>
-      <ackermann_topic>control/ackermann_cmd</ackermann_topic>
-      <twist_topic>control/twist_cmd</twist_topic>
-    </plugin>
-  </gazebo>
+    Control backend selection.
+    control_mode == "dynamic_model" -> custom kinematic vehicle dynamics + control plugins (below)
+    control_mode == "ros2_control"  -> gz_ros2_control physics-based control (at bottom of file)
+    Set via the `control_mode` param in config/global_config.yaml.
   -->
+  <xacro:arg name="control_mode" default="dynamic_model"/>
+  <xacro:property name="control_mode" value="$(arg control_mode)"/>
+
+  <!-- ============================================================= -->
+  <!-- DYNAMIC MODEL BACKEND (kinematic vehicle dynamics)            -->
+  <!-- ============================================================= -->
+  <xacro:if value="${control_mode == 'dynamic_model'}">
+
+    <!-- Vehicle Dynamics Plugin -->
+    <!--
+      IMPORTANT: This plugin uses WorldPoseCmd for kinematic control, which conflicts
+      with physics-based ROS 2 Control. Only active when control_mode == "dynamic_model".
+    -->
+    <gazebo>
+      <plugin filename="libgazebo_vehicle.so" name="gazebo_plugins::vehicle_plugins::VehiclePlugin">
+        <ros>
+          <namespace>/$(arg namespace)</namespace>
+        </ros>
+        <vehicle_params>$(find qutms_sim)/config/vehicle_params.yaml</vehicle_params>
+        <update_rate>50.0</update_rate>
+        <steering_lock_time>1.5</steering_lock_time>
+      </plugin>
+    </gazebo>
+
+    <!-- Vehicle Control Plugin (requires vehicle dynamics plugin) -->
+    <gazebo>
+      <plugin filename="libgazebo_vehicle_control.so" name="gazebo_plugins::vehicle_plugins::VehicleControlPlugin">
+        <ros>
+          <namespace>/$(arg namespace)</namespace>
+        </ros>
+        <control_delay>0.035</control_delay>
+        <enable_ackermann>true</enable_ackermann>
+        <enable_twist>true</enable_twist>
+        <ackermann_topic>control/ackermann_cmd</ackermann_topic>
+        <twist_topic>control/twist_cmd</twist_topic>
+      </plugin>
+    </gazebo>
+
+  </xacro:if>
+
 
   <!-- INS Odometry Plugin -->
   <!--
@@ -158,28 +172,33 @@
   </gazebo>
 
 
-  <!-- gz_ros2_control Gazebo Plugin -->
-  <!-- 
-    gz_ros2_control plugin - bridges ROS 2 Control with Gazebo simulation
-    
+  <!-- ============================================================= -->
+  <!-- ROS 2 CONTROL BACKEND (gz_ros2_control, physics-based)        -->
+  <!-- ============================================================= -->
+  <!--
+    gz_ros2_control plugin - bridges ROS 2 Control with Gazebo simulation.
+    Only active when control_mode == "ros2_control".
+
     Provides command and state interfaces for physics-based vehicle control:
     - Steering joints: position commands (target angle)
     - Wheel joints: effort commands (torque for propulsion/braking)
     - State feedback: position and velocity for all joints
-    
+
     Controllers (configured in ros2_controllers.yaml):
     - joint_state_broadcaster: Publishes to /joint_states for robot_state_publisher
     - ackermann_steering_controller: Bicycle model control via /cmd_vel
     - wheel effort controllers: Direct torque control for individual wheels
   -->
-  <gazebo>
-    <plugin filename="gz_ros2_control-system" 
-            name="gz_ros2_control::GazeboSimROS2ControlPlugin">
-      <parameters>$(find qutms_sim)/config/ros2_controllers.yaml</parameters>
-      <ros>
-        <namespace>/$(arg namespace)</namespace>
-      </ros>
-    </plugin>
-  </gazebo>
+  <xacro:if value="${control_mode == 'ros2_control'}">
+    <gazebo>
+      <plugin filename="gz_ros2_control-system"
+              name="gz_ros2_control::GazeboSimROS2ControlPlugin">
+        <parameters>$(find qutms_sim)/config/ros2_controllers.yaml</parameters>
+        <ros>
+          <namespace>/$(arg namespace)</namespace>
+        </ros>
+      </plugin>
+    </gazebo>
+  </xacro:if>
 
 </robot>

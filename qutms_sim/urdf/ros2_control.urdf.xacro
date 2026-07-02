@@ -24,6 +24,15 @@
 
   <xacro:arg name="namespace" default="sim"/>
 
+  <!--
+    Only declare the ros2_control hardware interfaces when the gz_ros2_control
+    backend is selected. In "dynamic_model" mode these joints are driven
+    kinematically and no controller_manager exists.
+  -->
+  <xacro:arg name="control_mode" default="dynamic_model"/>
+  <xacro:property name="control_mode" value="$(arg control_mode)"/>
+
+  <xacro:if value="${control_mode == 'ros2_control'}">
   <!-- ROS 2 Control System Definition -->
   <ros2_control name="GazeboSimSystem" type="system">
     <hardware>
@@ -67,5 +76,6 @@
       <state_interface name="position" />
     </joint>
   </ros2_control>
+  </xacro:if>
 
 </robot>

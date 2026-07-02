@@ -330,11 +330,12 @@ ros2 service call /reset_simulation std_srvs/srv/Trigger
 
 ### Simulation Config
 
-Edit `qutms_sim/config/config.yaml` for general simulator settings:
+Edit `qutms_sim/config/global_config.yaml` for general simulator settings:
 - Default track selection
 - Namespace settings
 - Visualization options
 - Update rates
+- Control backend (`control_mode`: `dynamic_model` or `ros2_control`)
 
 ### Vehicle Parameters
 
@@ -526,7 +527,7 @@ ros2 topic pub /control/twist_cmd geometry_msgs/msg/Twist "{linear: {x: 5.0}, an
 | `qutms_sim/config/ros2_controllers.yaml` | ROS 2 Control parameters |
 | `qutms_sim/config/vehicle_params.yaml` | Vehicle geometry, limits |
 | `qutms_sim/config/motion_noise.yaml` | Sensor noise parameters |
-| `qutms_sim/config/config.yaml` | General simulation settings |
+| `qutms_sim/config/global_config.yaml` | General simulation settings |
 | `qutms_sim/urdf/ros2_control.urdf.xacro` | Joint interface definitions |
 | `qutms_sim/urdf/gz_plugins.urdf.xacro` | Plugin configuration |
 | `qutms_sim/urdf/robot.urdf.xacro` | Main vehicle structure |

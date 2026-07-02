@@ -35,12 +35,24 @@ def load_world(context, *args, **kwargs):
     # Use empty world for testing (like gz_ros2_control_demos)
     use_empty = get_argument(context, "use_empty_world")
     
-    QUTMS = os.path.expanduser(os.environ.get("QUTMS_WS"))
+    ROS_ROOT = os.environ.get("ROS_ROOT")
+    if not ROS_ROOT:
+        raise RuntimeError(
+            "ROS_ROOT environment variable is not set. "
+            "Export it to your workspace root, e.g. `export ROS_ROOT=~/dev/workspace`, or add it to your .bashrc"
+        )
+    ROS_ROOT = os.path.expanduser(ROS_ROOT)
+
     DISTRO = os.environ.get("ROS_DISTRO")
+    if not DISTRO:
+        raise RuntimeError(
+            "ROS_DISTRO environment variable is not set. "
+            "Source your ROS installation first, e.g. `source /opt/ros/jazzy/setup.bash`"
+        )
 
     # Set GZ Sim environment variables
     os.environ["GZ_SIM_SYSTEM_PLUGIN_PATH"] = (
-        QUTMS + "/install/vehicle_plugins/lib:" + "/opt/ros/" + DISTRO + "/lib"
+        ROS_ROOT + "/install/vehicle_plugins/lib:" + "/opt/ros/" + DISTRO + "/lib"
     )
     os.environ["GZ_SIM_RESOURCE_PATH"] = (
         sim_pkg + "/models:" + 
@@ -49,14 +61,18 @@ def load_world(context, *args, **kwargs):
         os.environ.get("GZ_SIM_RESOURCE_PATH", "")
     )
 
+    # Run Gazebo headless (server-only, "-s") unless the GUI is requested
+    gz_gui = get_argument(context, "gz_gui")
+    headless_flag = "" if gz_gui.lower() == "true" else " -s"
+
     if use_empty == "true":
         # Use Gazebo's built-in empty world
-        gz_args = "-r -v 1 empty.sdf"
+        gz_args = f"-r -v 1 empty.sdf{headless_flag}"
     else:
         # Use custom track world
         track = str(get_argument(context, "track") + ".sdf")
         world_path = join(sim_pkg, "worlds", track)
-        gz_args = f"-r -v 1 {world_path} -s"
+        gz_args = f"-r -v 1 {world_path}{headless_flag}"
 
     gz_launch_path = join(get_package_share_directory("ros_gz_sim"), "launch", "gz_sim.launch.py")
     
@@ -93,6 +109,8 @@ def load_car(context, *args, **kwargs):
     base_frame = get_argument(context, "base_frame")
     display_car = get_argument(context, "display_car")
     namespace = get_argument(context, "namespace")
+    control_mode = get_argument(context, "control_mode")
+    gz_gui = get_argument(context, "gz_gui")
 
     xacro_path = join(sim_pkg, "urdf", "robot.urdf.xacro")
     urdf_path = join(sim_pkg, "urdf", "robot.urdf")
@@ -107,6 +125,7 @@ def load_car(context, *args, **kwargs):
             "base_frame": base_frame,
             "display_car": display_car,
             "namespace": namespace,
+            "control_mode": control_mode,
         },
     )
     
@@ -121,7 +140,14 @@ def load_car(context, *args, **kwargs):
     # Wrap robot_description as ParameterValue for ROS 2 Jazzy
     robot_description = ParameterValue(robot_description_content, value_type=str)
 
-    spawn_node = TimerAction(period=3.0, actions=[
+    # The GUI's scene sync (initial state fetch + incremental-update subscription)
+    # needs more wall-clock time to settle than headless mode does before it can
+    # reliably pick up entities created after startup. Spawning too early races
+    # that handshake and leaves the model out of the Entity Tree, even though the
+    # server (physics, ECM, sensors) has it fine either way.
+    spawn_delay = 6.0 if gz_gui.lower() == "true" else 2.0
+
+    spawn_node = TimerAction(period=spawn_delay, actions=[
         Node(
             name="spawn_robot",
             package="ros_gz_sim",
@@ -191,36 +217,40 @@ def load_car(context, *args, **kwargs):
 
 
     ### ROS2 Control setup ###
-
-    controller_config = join(sim_pkg, "config", "ros2_controllers.yaml")
-    
-    # Only spawn Ackermann controller and joint_state_broadcaster
-    # Based on working gz_ros2_control_demos/ackermann_drive_example
-    controller_names = [
-        "joint_state_broadcaster",
-        "ackermann_steering_controller",  # Using velocity interface with open_loop=false
-    ]
+    # Only relevant when using the gz_ros2_control backend. In "dynamic_model" mode
+    # the vehicle is driven by the custom kinematic plugins, so there is no
+    # controller_manager to talk to and spawning controllers would hang.
 
     controllers = []
-    # Controller spawners - sequentially load and activate controllers
-    # Stagger spawning to avoid overwhelming controller_manager
-    base_delay = 5.0
-    delay_increment = 2.0  # 2 seconds between each controller spawn
+    if control_mode == "ros2_control":
+        controller_config = join(sim_pkg, "config", "ros2_controllers.yaml")
 
-    for idx, name in enumerate(controller_names):
-        spawn_delay = base_delay + (idx * delay_increment)
-        controllers.append(
-            TimerAction(period=spawn_delay, actions=[
-                Node(
-                    package="controller_manager",
-                    executable="spawner",
-                    arguments=[name,
-                            "--param-file",
-                            controller_config],
-                    output="screen",
-                )
-            ])
-        )
+        # Only spawn Ackermann controller and joint_state_broadcaster
+        # Based on working gz_ros2_control_demos/ackermann_drive_example
+        controller_names = [
+            "joint_state_broadcaster",
+            "ackermann_steering_controller",  # Using velocity interface with open_loop=false
+        ]
+
+        # Controller spawners - sequentially load and activate controllers
+        # Stagger spawning to avoid overwhelming controller_manager
+        base_delay = spawn_delay + 2.0
+        delay_increment = 2.0  # 2 seconds between each controller spawn
+
+        for idx, name in enumerate(controller_names):
+            controller_spawn_delay = base_delay + (idx * delay_increment)
+            controllers.append(
+                TimerAction(period=controller_spawn_delay, actions=[
+                    Node(
+                        package="controller_manager",
+                        executable="spawner",
+                        arguments=[name,
+                                "--param-file",
+                                controller_config],
+                        output="screen",
+                    )
+                ])
+            )
 
     return [
         spawn_node,
@@ -259,7 +289,7 @@ def load_visuals(context, *args, **kwargs):
     ]
 
 def generate_launch_description():
-    default_plugin_yaml = join(sim_pkg, "config", "config.yaml")
+    default_plugin_yaml = join(sim_pkg, "config", "global_config.yaml")
 
     with open(default_plugin_yaml, "r") as f:
         data = yaml.safe_load(f)
@@ -273,6 +303,8 @@ def generate_launch_description():
     display_car = data["/**"]["ros__parameters"]["display_car"]
     namespace = data["/**"]["ros__parameters"]["namespace"]
     base_frame = data["/**"]["ros__parameters"]["base_frame"]
+    control_mode = data["/**"]["ros__parameters"]["control_mode"]
+    gz_gui = str(data["/**"]["ros__parameters"]["gz_gui"])
 
     # load yaml file
     return LaunchDescription(
@@ -321,6 +353,16 @@ def generate_launch_description():
                 name="use_empty_world",
                 default_value="false",
                 description="Use empty.sdf world instead of custom track (for testing)",
+            ),
+            DeclareLaunchArgument(
+                name="gz_gui",
+                default_value=gz_gui,
+                description="Launch the Gazebo GUI if true, otherwise run headless (server-only)",
+            ),
+            DeclareLaunchArgument(
+                name="control_mode",
+                default_value=control_mode,
+                description="Vehicle control backend: 'dynamic_model' (kinematic plugins) or 'ros2_control' (gz_ros2_control)",
             ),
             OpaqueFunction(function=load_visuals),
             # launch the gazebo world
